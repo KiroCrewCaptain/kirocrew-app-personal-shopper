@@ -11,13 +11,11 @@
 import { useCallback, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Folder, FolderPlus, Pencil, Plus, Tag, Trash2, X } from 'lucide-react'
-import * as shopApi from './api'
-import { Btn, EmptyState, Input } from '../../components/ui'
-import SimpleSelect from '../../components/SimpleSelect'
-import ErrorNotice from '../../components/ErrorNotice'
+import { Btn, EmptyState, ErrorNotice, Input } from '@kirocrew/app-sdk/ui'
+import { useShopApi, type ShopApi } from './api'
+import { caution, Select } from './hostSdk'
+import { t } from './i18n'
 
-import { i18nT } from '../../i18n/t'
-import { guideCaution } from '../../guide/trustRoot'
 // ── Types ──
 
 interface Preference {
@@ -37,31 +35,31 @@ interface Group {
 
 // ── API helpers ──
 
-async function fetchPreferences(): Promise<{ preferences: Preference[] }> {
+async function fetchPreferences(shopApi: ShopApi): Promise<{ preferences: Preference[] }> {
   return shopApi.get('/preferences')
 }
 
-async function fetchGroups(): Promise<{ groups: Group[] }> {
+async function fetchGroups(shopApi: ShopApi): Promise<{ groups: Group[] }> {
   return shopApi.get('/groups')
 }
 
-async function addPreference(text: string, tags: string[]): Promise<{ id: string }> {
+async function addPreference(shopApi: ShopApi, text: string, tags: string[]): Promise<{ id: string }> {
   return shopApi.post('/preferences', { text, tags })
 }
 
-async function updatePreference(id: string, data: { text?: string; tags?: string[] }): Promise<void> {
+async function updatePreference(shopApi: ShopApi, id: string, data: { text?: string; tags?: string[] }): Promise<void> {
   await shopApi.put(`/preferences/${id}`, data)
 }
 
-async function deletePreference(id: string): Promise<void> {
+async function deletePreference(shopApi: ShopApi, id: string): Promise<void> {
   await shopApi.del(`/preferences/${id}`)
 }
 
-async function addGroup(name: string, icon: string): Promise<{ id: string }> {
+async function addGroup(shopApi: ShopApi, name: string, icon: string): Promise<{ id: string }> {
   return shopApi.post('/groups', { name, icon })
 }
 
-async function deleteGroup(id: string): Promise<void> {
+async function deleteGroup(shopApi: ShopApi, id: string): Promise<void> {
   await shopApi.del(`/groups/${id}`)
 }
 
@@ -69,6 +67,7 @@ async function deleteGroup(id: string): Promise<void> {
 
 export function PreferencesTab() {
   const queryClient = useQueryClient()
+  const shopApi = useShopApi()
   const [newPrefText, setNewPrefText] = useState('')
   const [newPrefGroup, setNewPrefGroup] = useState('')
   const [newGroupName, setNewGroupName] = useState('')
@@ -76,12 +75,12 @@ export function PreferencesTab() {
 
   const { data: prefsData, isLoading: prefsLoading } = useQuery({
     queryKey: ['personal-shopper', 'preferences'],
-    queryFn: fetchPreferences,
+    queryFn: () => fetchPreferences(shopApi),
   })
 
   const { data: groupsData } = useQuery({
     queryKey: ['personal-shopper', 'groups'],
-    queryFn: fetchGroups,
+    queryFn: () => fetchGroups(shopApi),
   })
 
   const invalidate = useCallback(() => {
@@ -89,22 +88,22 @@ export function PreferencesTab() {
   }, [queryClient])
 
   const addPrefMutation = useMutation({
-    mutationFn: ({ text, tags }: { text: string; tags: string[] }) => addPreference(text, tags),
+    mutationFn: ({ text, tags }: { text: string; tags: string[] }) => addPreference(shopApi, text, tags),
     onSuccess: () => { invalidate(); setNewPrefText('') },
   })
 
   const deletePrefMutation = useMutation({
-    mutationFn: (id: string) => deletePreference(id),
+    mutationFn: (id: string) => deletePreference(shopApi, id),
     onSuccess: invalidate,
   })
 
   const addGroupMutation = useMutation({
-    mutationFn: ({ name, icon }: { name: string; icon: string }) => addGroup(name, icon),
+    mutationFn: ({ name, icon }: { name: string; icon: string }) => addGroup(shopApi, name, icon),
     onSuccess: () => { invalidate(); setNewGroupName(''); setShowGroupForm(false) },
   })
 
   const deleteGroupMutation = useMutation({
-    mutationFn: (id: string) => deleteGroup(id),
+    mutationFn: (id: string) => deleteGroup(shopApi, id),
     onSuccess: invalidate,
   })
 
@@ -114,7 +113,7 @@ export function PreferencesTab() {
   const groupNames = new Map(groups.map((g) => [g.id, g.name]))
 
   if (prefsLoading) {
-    return <div className="text-sm text-[var(--muted)] py-8 text-center">{i18nT('apps.personalShopper.preferencesTab.loading_preferences')}</div>
+    return <div className="text-sm text-[var(--muted)] py-8 text-center">{t('preferencesTab.loading_preferences')}</div>
   }
 
   // Group preferences by tag
@@ -153,24 +152,24 @@ export function PreferencesTab() {
         <Input
           value={newPrefText}
           onChange={(e) => setNewPrefText(e.target.value)}
-          placeholder={i18nT('apps.personalShopper.preferencesTab.add_a_preference_e_g_shoe_size_us_10')}
+          placeholder={t('preferencesTab.add_a_preference_e_g_shoe_size_us_10')}
           className="flex-1"
         />
         {groups.length > 0 && (
-          <SimpleSelect
+          <Select
             options={groups.map((g) => g.id)}
             optionLabels={groups.map((g) => g.name)}
             value={newPrefGroup}
             onChange={setNewPrefGroup}
-            clearLabel={i18nT('apps.personalShopper.preferencesTab.no_group')}
-            aria-label={i18nT('apps.personalShopper.preferencesTab.assign_to_group')}
+            clearLabel={t('preferencesTab.no_group')}
+            aria-label={t('preferencesTab.assign_to_group')}
           />
         )}
         <Btn
           type="submit"
           disabled={!newPrefText.trim() || addPrefMutation.isPending}
         >
-          <Plus size={14} /> {i18nT('apps.personalShopper.preferencesTab.add')}
+          <Plus size={14} /> {t('preferencesTab.add')}
         </Btn>
       </form>
 
@@ -198,14 +197,14 @@ export function PreferencesTab() {
         role="note"
         className="text-sm px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text)] leading-relaxed"
       >
-        {i18nT('apps.personalShopper.preferencesTab.the_advisor_cannot_read_this_list_paste_what_ma')}
+        {t('preferencesTab.the_advisor_cannot_read_this_list_paste_what_ma')}
       </p>
 
       {preferences.length === 0 && (
         <EmptyState
           icon={<Tag size={28} />}
-          title={i18nT('apps.personalShopper.preferencesTab.no_preferences_yet')}
-          subtitle={i18nT('apps.personalShopper.preferencesTab.add_your_first_preference')}
+          title={t('preferencesTab.no_preferences_yet')}
+          subtitle={t('preferencesTab.add_your_first_preference')}
         />
       )}
 
@@ -227,15 +226,15 @@ export function PreferencesTab() {
               <button
                 onClick={() => deleteGroupMutation.mutate(group.id)}
                 className="text-[var(--muted)] hover:text-[var(--danger)] transition-colors"
-                title={i18nT('apps.personalShopper.preferencesTab.delete_group_keeps_preferences')}
-                aria-label={i18nT('apps.personalShopper.preferencesTab.delete_named_group', { name: group.name })}
-                {...guideCaution}
+                title={t('preferencesTab.delete_group_keeps_preferences')}
+                aria-label={t('preferencesTab.delete_named_group', { name: group.name })}
+                {...caution}
               >
                 <X size={12} />
               </button>
             </div>
             {items.length === 0 ? (
-              <p className="text-[11px] text-[var(--muted)] italic pl-2">{i18nT('apps.personalShopper.preferencesTab.no_items_in_this_group')}</p>
+              <p className="text-[11px] text-[var(--muted)] italic pl-2">{t('preferencesTab.no_items_in_this_group')}</p>
             ) : (
               <div className="space-y-1">
                 {items.map((p) => (
@@ -259,7 +258,7 @@ export function PreferencesTab() {
       {ungrouped.length > 0 && (
         <section className="space-y-1">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-            {i18nT('apps.personalShopper.preferencesTab.ungrouped')}
+            {t('preferencesTab.ungrouped')}
           </h3>
           <div className="space-y-1">
             {ungrouped.map((p) => (
@@ -295,20 +294,18 @@ export function PreferencesTab() {
             <Input
               value={newGroupName}
               onChange={(e) => setNewGroupName(e.target.value)}
-              placeholder={i18nT('apps.personalShopper.preferencesTab.group_name')}
+              placeholder={t('preferencesTab.group_name')}
               className="flex-1"
               autoFocus
             />
             <Btn type="submit" disabled={!newGroupName.trim()}>
-              {i18nT('apps.personalShopper.preferencesTab.create')}
+              {t('preferencesTab.create')}
             </Btn>
             <Btn
               type="button"
-             
-             
               onClick={() => setShowGroupForm(false)}
             >
-              {i18nT('apps.personalShopper.preferencesTab.cancel')}
+              {t('preferencesTab.cancel')}
             </Btn>
           </form>
         ) : (
@@ -316,7 +313,7 @@ export function PreferencesTab() {
             onClick={() => setShowGroupForm(true)}
             className="flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--accent)] transition-colors"
           >
-            <FolderPlus size={14} /> {i18nT('apps.personalShopper.preferencesTab.add_group')}
+            <FolderPlus size={14} /> {t('preferencesTab.add_group')}
           </button>
         )}
       </div>
@@ -386,6 +383,7 @@ function PreferenceRow({
    *  pure restatement of the heading directly above it. */
   sectionGroupId?: string
 }) {
+  const shopApi = useShopApi()
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState(pref.text)
   const rowTag = rowTagFor(pref.tags, sectionGroupId)
@@ -420,7 +418,7 @@ function PreferenceRow({
   }
 
   const updateMutation = useMutation({
-    mutationFn: (data: { text?: string; tags?: string[] }) => updatePreference(pref.id, data),
+    mutationFn: (data: { text?: string; tags?: string[] }) => updatePreference(shopApi, pref.id, data),
     onSuccess: () => { setEditing(false); onUpdate() },
   })
 
@@ -457,28 +455,28 @@ function PreferenceRow({
         <input
           value={editText}
           onChange={(e) => setEditText(e.target.value)}
-          aria-label={i18nT('apps.personalShopper.preferencesTab.edit_named_preference', { text: pref.text })}
+          aria-label={t('preferencesTab.edit_named_preference', { text: pref.text })}
           className="flex-1 text-sm bg-transparent text-[var(--text)]"
           autoFocus
           onKeyDown={(e) => { if (e.key === 'Escape') setEditing(false) }}
         />
         {canReassign && groups.length > 0 && (
-          <SimpleSelect
+          <Select
             options={groups.map((g) => g.id)}
             optionLabels={groups.map((g) => g.name)}
             value={editGroup}
             onChange={setEditGroup}
-            clearLabel={i18nT('apps.personalShopper.preferencesTab.no_group')}
-            aria-label={i18nT('apps.personalShopper.preferencesTab.assign_to_group')}
+            clearLabel={t('preferencesTab.no_group')}
+            aria-label={t('preferencesTab.assign_to_group')}
           />
         )}
-        <Btn type="submit" disabled={!editText.trim() || !changed}>{i18nT('apps.personalShopper.preferencesTab.save')}</Btn>
+        <Btn type="submit" disabled={!editText.trim() || !changed}>{t('preferencesTab.save')}</Btn>
         <button
           type="button"
           onClick={() => setEditing(false)}
           className="text-[var(--muted)]"
-          title={i18nT('apps.personalShopper.preferencesTab.cancel')}
-          aria-label={i18nT('apps.personalShopper.preferencesTab.cancel')}
+          title={t('preferencesTab.cancel')}
+          aria-label={t('preferencesTab.cancel')}
         >
           <X size={14} />
         </button>
@@ -508,17 +506,17 @@ function PreferenceRow({
         <button
           onClick={startEditing}
           className="text-[var(--muted)] hover:text-[var(--accent)]"
-          title={i18nT('apps.personalShopper.preferencesTab.edit')}
-          aria-label={i18nT('apps.personalShopper.preferencesTab.edit_named_preference', { text: pref.text })}
+          title={t('preferencesTab.edit')}
+          aria-label={t('preferencesTab.edit_named_preference', { text: pref.text })}
         >
           <Pencil size={12} />
         </button>
         <button
           onClick={onDelete}
           className="text-[var(--muted)] hover:text-[var(--danger)]"
-          title={i18nT('apps.personalShopper.preferencesTab.delete')}
-          aria-label={i18nT('apps.personalShopper.preferencesTab.delete_named_preference', { text: pref.text })}
-          {...guideCaution}
+          title={t('preferencesTab.delete')}
+          aria-label={t('preferencesTab.delete_named_preference', { text: pref.text })}
+          {...caution}
         >
           <Trash2 size={12} />
         </button>

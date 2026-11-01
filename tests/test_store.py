@@ -25,26 +25,22 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 
 
 class _FakeEmbedder:
-    """Deterministic stand-in: each text maps to a fixed unit-ish vector."""
+    """The host's embed SDK (``ctx.embed``), reduced to a fixed text -> vector map.
+
+    A text with no entry embeds to None, as the host's does when its model fails.
+    A store built with no embedder at all is a boot where the model has not
+    landed: every embed returns None and search runs on keywords.
+    """
 
     def __init__(self, vectors: dict[str, list[float]] | None = None, ready: bool = True):
         self._vectors = vectors or {}
         self._ready = ready
 
-    def is_ready(self) -> bool:
+    def available(self) -> bool:
         return self._ready
 
-    def embed(self, text: str) -> list[float] | None:
+    def embed_sync(self, text: str) -> list[float] | None:
         return self._vectors.get(text)
-
-
-def _with_embedder(embedder) -> mock._patch:
-    return mock.patch.object(store_mod, "get_shared_embedder", lambda: embedder)
-
-
-def _no_embedder() -> mock._patch:
-    """Simulate a boot where the model has not landed: every embed returns None."""
-    return mock.patch.object(store_mod, "get_shared_embedder", lambda: _FakeEmbedder({}))
 
 
 class PreferenceStoreTestCase(unittest.TestCase):
@@ -58,8 +54,8 @@ class PreferenceStoreTestCase(unittest.TestCase):
         # is still open fails on Windows and leaves temp directories behind.
         self.addCleanup(shutil.rmtree, self._tmp, ignore_errors=True)
 
-    def _store(self) -> PreferenceStore:
-        s = PreferenceStore(db_path=self.db)
+    def _store(self, embedder: _FakeEmbedder | None = None) -> PreferenceStore:
+        s = PreferenceStore(db_path=self.db, embedder=embedder)
         self.addCleanup(s.close)
         return s
 
@@ -67,28 +63,25 @@ class PreferenceStoreTestCase(unittest.TestCase):
 class TestKeywordFallbackSafety(PreferenceStoreTestCase):
     def test_tag_filter_applies_before_result_limit(self) -> None:
         """Other groups' stronger matches cannot hide the requested group's hits."""
-        with _no_embedder():
-            store = self._store()
-            for _ in range(7):
-                store.add("latex", tags=["other"])
-            first = store.add("avoid latex gloves for cleaning", tags=["health"])
-            second = store.add(
-                "avoid latex in all clothing and household products", tags=["clothing"]
-            )
+        store = self._store()
+        for _ in range(7):
+            store.add("latex", tags=["other"])
+        first = store.add("avoid latex gloves for cleaning", tags=["health"])
+        second = store.add("avoid latex in all clothing and household products", tags=["clothing"])
 
-            # Prove the excluded rows fill the over-fetch window, without ties
-            # between the excluded and requested groups determining the result.
-            unfiltered = store.search("latex", top_k=9)
-            self.assertTrue(all(r.tags == ["other"] for r in unfiltered[:7]))
-            self.assertEqual([r.id for r in unfiltered[7:]], [first, second])
+        # Prove the excluded rows fill the over-fetch window, without ties
+        # between the excluded and requested groups determining the result.
+        unfiltered = store.search("latex", top_k=9)
+        self.assertTrue(all(r.tags == ["other"] for r in unfiltered[:7]))
+        self.assertEqual([r.id for r in unfiltered[7:]], [first, second])
 
-            for limit in (1, 2):
-                with self.subTest(top_k=limit):
-                    results = store.search("latex", top_k=limit, tag_filter=["health", "clothing"])
-                    self.assertEqual([r.id for r in results], [first, second][:limit])
-                    self.assertTrue(all(not r.semantic for r in results))
-            self.assertEqual(store.search("latex", tag_filter=["missing"]), [])
-            self.assertEqual(store.search("latex", top_k=2, tag_filter=[]), unfiltered[:2])
+        for limit in (1, 2):
+            with self.subTest(top_k=limit):
+                results = store.search("latex", top_k=limit, tag_filter=["health", "clothing"])
+                self.assertEqual([r.id for r in results], [first, second][:limit])
+                self.assertTrue(all(not r.semantic for r in results))
+        self.assertEqual(store.search("latex", tag_filter=["missing"]), [])
+        self.assertEqual(store.search("latex", top_k=2, tag_filter=[]), unfiltered[:2])
 
     def test_keyword_fallback_never_dedups(self) -> None:
         """Two preferences that merely SHARE A WORD must both survive.
@@ -98,27 +91,25 @@ class TestKeywordFallbackSafety(PreferenceStoreTestCase):
         merges "shoe size US 10" into "prefers running shoes" and the user's size
         is gone.
         """
-        with _no_embedder():
-            store = self._store()
-            first = store.add("prefers running shoes")
-            second = store.add("shoe size US 10")
+        store = self._store()
+        first = store.add("prefers running shoes")
+        second = store.add("shoe size US 10")
 
-            self.assertNotEqual(first, second, "the two preferences were merged")
-            texts = sorted(p["text"] for p in store.list_all())
-            self.assertEqual(texts, ["prefers running shoes", "shoe size US 10"])
+        self.assertNotEqual(first, second, "the two preferences were merged")
+        texts = sorted(p["text"] for p in store.list_all())
+        self.assertEqual(texts, ["prefers running shoes", "shoe size US 10"])
 
     def test_keyword_results_are_flagged_non_semantic(self) -> None:
         """A keyword hit must not masquerade as a similarity score."""
-        with _no_embedder():
-            store = self._store()
-            store.add("allergic to latex")
+        store = self._store()
+        store.add("allergic to latex")
 
-            results = store.search("latex")
-            self.assertTrue(results, "keyword fallback returned nothing")
-            self.assertFalse(
-                results[0].semantic,
-                "a keyword score was reported as a semantic similarity",
-            )
+        results = store.search("latex")
+        self.assertTrue(results, "keyword fallback returned nothing")
+        self.assertFalse(
+            results[0].semantic,
+            "a keyword score was reported as a semantic similarity",
+        )
 
     def test_dedup_rejects_a_non_semantic_hit_even_at_score_one(self) -> None:
         """The guard is the FLAG, not the number.
@@ -128,36 +119,34 @@ class TestKeywordFallbackSafety(PreferenceStoreTestCase):
         would merge on that; it must refuse purely because the hit is not
         semantic.
         """
-        with _no_embedder():
-            store = self._store()
-            store.add("prefers running shoes")
+        store = self._store()
+        store.add("prefers running shoes")
 
-            perfect_keyword_hit = [
-                store_mod.SearchResult(
-                    id="whatever",
-                    text="prefers running shoes",
-                    tags=[],
-                    score=1.0,
-                    semantic=False,
-                )
-            ]
-            with mock.patch.object(store, "search", return_value=perfect_keyword_hit):
-                self.assertIsNone(
-                    store._find_similar("shoe size US 10"),
-                    "dedup accepted a keyword hit scoring 1.0",
-                )
+        perfect_keyword_hit = [
+            store_mod.SearchResult(
+                id="whatever",
+                text="prefers running shoes",
+                tags=[],
+                score=1.0,
+                semantic=False,
+            )
+        ]
+        with mock.patch.object(store, "search", return_value=perfect_keyword_hit):
+            self.assertIsNone(
+                store._find_similar("shoe size US 10"),
+                "dedup accepted a keyword hit scoring 1.0",
+            )
 
     def test_fts_query_with_operator_characters_does_not_error(self) -> None:
         """Raw user text containing FTS5 syntax must still search."""
-        with _no_embedder():
-            store = self._store()
-            store.add("avoids wool sweaters")
+        store = self._store()
+        store.add("avoids wool sweaters")
 
-            # An unbalanced quote and a bare operator are a query-syntax error to
-            # FTS5 if passed through unescaped.
-            for probe in ['wool "', "wool OR", "wool*", '"']:
-                with self.subTest(probe=probe):
-                    store.search(probe)  # must not raise
+        # An unbalanced quote and a bare operator are a query-syntax error to
+        # FTS5 if passed through unescaped.
+        for probe in ['wool "', "wool OR", "wool*", '"']:
+            with self.subTest(probe=probe):
+                store.search(probe)  # must not raise
 
 
 class TestSemanticDedup(PreferenceStoreTestCase):
@@ -166,25 +155,23 @@ class TestSemanticDedup(PreferenceStoreTestCase):
             "shoe size US 10": [1.0, 0.0, 0.0],
             "shoe size is US 10": [0.999, 0.01, 0.0],
         }
-        with _with_embedder(_FakeEmbedder(vectors)):
-            store = self._store()
-            first = store.add("shoe size US 10")
-            second = store.add("shoe size is US 10")
+        store = self._store(_FakeEmbedder(vectors))
+        first = store.add("shoe size US 10")
+        second = store.add("shoe size is US 10")
 
-            self.assertEqual(first, second, "a restatement created a second entry")
-            self.assertEqual(len(store.list_all()), 1)
+        self.assertEqual(first, second, "a restatement created a second entry")
+        self.assertEqual(len(store.list_all()), 1)
 
     def test_low_cosine_keeps_both(self) -> None:
         vectors = {
             "shoe size US 10": [1.0, 0.0, 0.0],
             "allergic to latex": [0.0, 1.0, 0.0],
         }
-        with _with_embedder(_FakeEmbedder(vectors)):
-            store = self._store()
-            store.add("shoe size US 10")
-            store.add("allergic to latex")
+        store = self._store(_FakeEmbedder(vectors))
+        store.add("shoe size US 10")
+        store.add("allergic to latex")
 
-            self.assertEqual(len(store.list_all()), 2)
+        self.assertEqual(len(store.list_all()), 2)
 
 
 class TestVectorStaleness(PreferenceStoreTestCase):
@@ -195,13 +182,12 @@ class TestVectorStaleness(PreferenceStoreTestCase):
         has deleted — a silent recall corruption that no UI surface reveals.
         """
         vectors = {"budget under $100": [1.0, 0.0, 0.0]}
-        with _with_embedder(_FakeEmbedder(vectors)):
-            store = self._store()
-            entry_id = store.add("budget under $100")
+        store = self._store(_FakeEmbedder(vectors))
+        entry_id = store.add("budget under $100")
 
         # The model goes away, then the user edits the text.
-        with _no_embedder():
-            store.update(entry_id, text="budget under $400")
+        store.embedder = None
+        store.update(entry_id, text="budget under $400")
 
         # sqlite's context manager commits/rolls back but does NOT close the
         # handle.  Close explicitly so Windows can remove the WAL directory.
@@ -213,12 +199,11 @@ class TestVectorStaleness(PreferenceStoreTestCase):
         self.assertIsNone(blob, "the vector for the OLD text was kept")
 
     def test_reembed_all_refills_cleared_vectors(self) -> None:
-        with _no_embedder():
-            store = self._store()
-            store.add("prefers minimalist style")
+        store = self._store()
+        store.add("prefers minimalist style")
 
-        with _with_embedder(_FakeEmbedder({"prefers minimalist style": [0.0, 1.0]})):
-            self.assertEqual(store.reembed_all(), 1)
+        store.embedder = _FakeEmbedder({"prefers minimalist style": [0.0, 1.0]})
+        self.assertEqual(store.reembed_all(), 1)
 
         with closing(sqlite3.connect(str(self.db))) as conn:
             (blob,) = conn.execute("SELECT embedding FROM preferences").fetchone()
@@ -235,49 +220,45 @@ class TestVectorStaleness(PreferenceStoreTestCase):
 class TestFtsIndexSync(PreferenceStoreTestCase):
     def test_update_replaces_the_indexed_text(self) -> None:
         """After an edit the OLD wording must not be findable."""
-        with _no_embedder():
-            store = self._store()
-            entry_id = store.add("prefers wool coats")
-            store.update(entry_id, text="prefers down jackets")
+        store = self._store()
+        entry_id = store.add("prefers wool coats")
+        store.update(entry_id, text="prefers down jackets")
 
-            self.assertEqual([r.text for r in store.search("wool")], [])
-            self.assertEqual([r.text for r in store.search("down")], ["prefers down jackets"])
+        self.assertEqual([r.text for r in store.search("wool")], [])
+        self.assertEqual([r.text for r in store.search("down")], ["prefers down jackets"])
 
     def test_delete_removes_from_the_index(self) -> None:
-        with _no_embedder():
-            store = self._store()
-            entry_id = store.add("avoids leather")
-            store.delete(entry_id)
+        store = self._store()
+        entry_id = store.add("avoids leather")
+        store.delete(entry_id)
 
-            self.assertEqual(store.search("leather"), [])
-            self.assertEqual(store.list_all(), [])
+        self.assertEqual(store.search("leather"), [])
+        self.assertEqual(store.list_all(), [])
 
 
 class TestTagsAreOrganisationOnly(PreferenceStoreTestCase):
     def test_deleting_a_group_keeps_its_preferences(self) -> None:
         """A group is the user's filing, not the knowledge itself."""
-        with _no_embedder():
-            store = self._store()
-            # The id is opaque (a slug collapses "Work Shoes" and "work-shoes"
-            # onto one key), so the group's own id is the only handle.
-            group_id = store.add_group("Body")
-            entry_id = store.add("shoe size US 10", tags=[group_id])
+        store = self._store()
+        # The id is opaque (a slug collapses "Work Shoes" and "work-shoes"
+        # onto one key), so the group's own id is the only handle.
+        group_id = store.add_group("Body")
+        entry_id = store.add("shoe size US 10", tags=[group_id])
 
-            store.delete_group(group_id)
+        store.delete_group(group_id)
 
-            remaining = store.list_all()
-            self.assertEqual(len(remaining), 1, "deleting a folder deleted the fact")
-            self.assertEqual(remaining[0]["id"], entry_id)
-            self.assertEqual(remaining[0]["tags"], [], "the stale tag was left behind")
-            self.assertEqual(store.list_groups(), [])
+        remaining = store.list_all()
+        self.assertEqual(len(remaining), 1, "deleting a folder deleted the fact")
+        self.assertEqual(remaining[0]["id"], entry_id)
+        self.assertEqual(remaining[0]["tags"], [], "the stale tag was left behind")
+        self.assertEqual(store.list_groups(), [])
 
     def test_search_ignores_tags_by_default(self) -> None:
         """An untagged preference must still be retrievable."""
-        with _no_embedder():
-            store = self._store()
-            store.add("allergic to latex")  # no tags at all
+        store = self._store()
+        store.add("allergic to latex")  # no tags at all
 
-            self.assertEqual([r.text for r in store.search("latex")], ["allergic to latex"])
+        self.assertEqual([r.text for r in store.search("latex")], ["allergic to latex"])
 
 
 class TestTheStoreLivesInTheAppDataDir(unittest.TestCase):
@@ -308,51 +289,48 @@ class TestConcurrentWrites(PreferenceStoreTestCase):
         Without serialisation the interleaved multi-statement FTS sync races and
         sqlite raises 'database is locked'.
         """
-        with _no_embedder():
-            store = self._store()
-            errors: list[BaseException] = []
+        store = self._store()
+        errors: list[BaseException] = []
 
-            def add(i: int) -> None:
-                try:
-                    store.add(f"distinct preference number {i}")
-                except BaseException as exc:  # noqa: BLE001 - recorded and re-raised
-                    errors.append(exc)
+        def add(i: int) -> None:
+            try:
+                store.add(f"distinct preference number {i}")
+            except BaseException as exc:  # noqa: BLE001 - recorded and re-raised
+                errors.append(exc)
 
-            threads = [threading.Thread(target=add, args=(i,)) for i in range(12)]
-            for t in threads:
-                t.start()
-            for t in threads:
-                t.join()
+        threads = [threading.Thread(target=add, args=(i,)) for i in range(12)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
 
-            self.assertEqual(errors, [], f"concurrent writes failed: {errors}")
-            self.assertEqual(len(store.list_all()), 12)
+        self.assertEqual(errors, [], f"concurrent writes failed: {errors}")
+        self.assertEqual(len(store.list_all()), 12)
 
 
 class TestHistory(PreferenceStoreTestCase):
     def test_history_round_trips_with_feedback(self) -> None:
-        with _no_embedder():
-            store = self._store()
-            hid = store.add_history(
-                "half marathon with bad knees",
-                advice="high-cushion shoe, not a barefoot model",
-                products=[{"name": "Pegasus 41", "price": 129}],
-            )
-            store.update_feedback(hid, "Pegasus 41", "purchased")
+        store = self._store()
+        hid = store.add_history(
+            "half marathon with bad knees",
+            advice="high-cushion shoe, not a barefoot model",
+            products=[{"name": "Pegasus 41", "price": 129}],
+        )
+        store.update_feedback(hid, "Pegasus 41", "purchased")
 
-            (session,) = store.list_history()
-            self.assertEqual(session["problem"], "half marathon with bad knees")
-            self.assertEqual(session["products"][0]["name"], "Pegasus 41")
-            self.assertEqual(session["feedback"], {"Pegasus 41": "purchased"})
+        (session,) = store.list_history()
+        self.assertEqual(session["problem"], "half marathon with bad knees")
+        self.assertEqual(session["products"][0]["name"], "Pegasus 41")
+        self.assertEqual(session["feedback"], {"Pegasus 41": "purchased"})
 
     def test_advice_only_session_has_no_products(self) -> None:
         """A session that solved the problem WITHOUT a purchase is a valid one."""
-        with _no_embedder():
-            store = self._store()
-            store.add_history("neck ache at my desk", advice="raise the monitor")
+        store = self._store()
+        store.add_history("neck ache at my desk", advice="raise the monitor")
 
-            (session,) = store.list_history()
-            self.assertEqual(session["products"], [])
-            self.assertTrue(session["advice"])
+        (session,) = store.list_history()
+        self.assertEqual(session["products"], [])
+        self.assertTrue(session["advice"])
 
 
 def _manifest() -> dict:
@@ -435,30 +413,28 @@ class TestGroupAssignmentSurvives(PreferenceStoreTestCase):
         it just disappears from its section, which reads as data loss.
         """
         vectors = {"shoe size US 10": [1.0, 0.0], "shoe size US10": [1.0, 0.0]}
-        with _with_embedder(_FakeEmbedder(vectors)):
-            store = self._store()
-            group_id = store.add_group("Body")
-            entry_id = store.add("shoe size US 10", tags=[group_id])
+        store = self._store(_FakeEmbedder(vectors))
+        group_id = store.add_group("Body")
+        entry_id = store.add("shoe size US 10", tags=[group_id])
 
-            # Same claim, no group picked.
-            again = store.add("shoe size US10", tags=[])
+        # Same claim, no group picked.
+        again = store.add("shoe size US10", tags=[])
 
-            self.assertEqual(again, entry_id, "expected a dedup merge")
-            stored = {e["id"]: e for e in store.list_all()}
-            self.assertIn(group_id, stored[entry_id]["tags"], "dedup erased the group assignment")
+        self.assertEqual(again, entry_id, "expected a dedup merge")
+        stored = {e["id"]: e for e in store.list_all()}
+        self.assertIn(group_id, stored[entry_id]["tags"], "dedup erased the group assignment")
 
     def test_dedup_unions_rather_than_discarding_new_tags(self) -> None:
         vectors = {"budget is $100": [0.0, 1.0], "budget about $100": [0.0, 1.0]}
-        with _with_embedder(_FakeEmbedder(vectors)):
-            store = self._store()
-            first = store.add_group("Money")
-            second = store.add_group("Gifts")
-            entry_id = store.add("budget is $100", tags=[first])
+        store = self._store(_FakeEmbedder(vectors))
+        first = store.add_group("Money")
+        second = store.add_group("Gifts")
+        entry_id = store.add("budget is $100", tags=[first])
 
-            store.add("budget about $100", tags=[second])
+        store.add("budget about $100", tags=[second])
 
-            stored = {e["id"]: e for e in store.list_all()}
-            self.assertEqual(sorted(stored[entry_id]["tags"]), sorted([first, second]))
+        stored = {e["id"]: e for e in store.list_all()}
+        self.assertEqual(sorted(stored[entry_id]["tags"]), sorted([first, second]))
 
 
 class TestGroupIdsAreOpaque(PreferenceStoreTestCase):
@@ -469,29 +445,26 @@ class TestGroupIdsAreOpaque(PreferenceStoreTestCase):
         first group's metadata AND reassigned every preference tagged with that
         id into the second group.
         """
-        with _no_embedder():
-            store = self._store()
-            a = store.add_group("Work Shoes")
-            b = store.add_group("work-shoes")
+        store = self._store()
+        a = store.add_group("Work Shoes")
+        b = store.add_group("work-shoes")
 
-            self.assertNotEqual(a, b, "distinct names collapsed onto one id")
-            self.assertEqual(len(store.list_groups()), 2)
+        self.assertNotEqual(a, b, "distinct names collapsed onto one id")
+        self.assertEqual(len(store.list_groups()), 2)
 
     def test_adding_the_same_name_twice_returns_the_same_group(self) -> None:
         """Opaque ids must not cost the idempotency the slug provided."""
-        with _no_embedder():
-            store = self._store()
-            first = store.add_group("Body")
-            second = store.add_group("  body  ")
+        store = self._store()
+        first = store.add_group("Body")
+        second = store.add_group("  body  ")
 
-            self.assertEqual(first, second)
-            self.assertEqual(len(store.list_groups()), 1)
+        self.assertEqual(first, second)
+        self.assertEqual(len(store.list_groups()), 1)
 
     def test_a_group_id_is_not_derived_from_its_name(self) -> None:
-        with _no_embedder():
-            store = self._store()
-            group_id = store.add_group("Work Shoes")
-            self.assertNotEqual(group_id, "work-shoes")
+        store = self._store()
+        group_id = store.add_group("Work Shoes")
+        self.assertNotEqual(group_id, "work-shoes")
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@
  * Every case below is a defect that shipped in an earlier revision.
  */
 import { describe, it, expect } from 'vitest'
-import { rowTagFor, nextTagsForRowEdit } from '../apps/personal-shopper/PreferencesTab'
+import { rowTagFor, nextTagsForRowEdit } from '../src/PreferencesTab'
 
 describe('rowTagFor', () => {
   it('uses the section the row is rendered under, not the first tag', () => {

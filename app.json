@@ -5,6 +5,7 @@
   "description": "A personal advisor that researches real stores and helps solve problems that may or may not end in a purchase. The Preferences tab is your own reference list — paste what matters into chat. It never buys anything — you do.",
   "author": "kirocrew",
   "license": "Apache-2.0",
+  "minKiroCrewVersion": "0.12.0",
   "tags": [
     "shopping",
     "advisor",
@@ -50,6 +51,15 @@
       "on_shutdown": "backend.routes:on_shutdown"
     }
   },
+  "ui": {
+    "entry": "dist/index.mjs",
+    "pages": [
+      {
+        "route": "/apps/personal-shopper",
+        "label": "Personal Shopper"
+      }
+    ]
+  },
   "useCases": [
     "Research products from named public stores while keeping the decision, cart, account, and checkout under your control."
   ],
@@ -58,5 +68,139 @@
   ],
   "screenshots": [
     "assets/screenshot-main.png"
-  ]
+  ],
+  "l10n": {
+    "bn": {
+      "displayName": "Personal Shopper",
+      "description": "একজন ব্যক্তিগত পরামর্শদাতা, যে সত্যিকারের স্টোরের তথ্য খুঁজে দেখে এবং এমন সমস্যা সমাধানে সাহায্য করে যার শেষ কেনাকাটায় নাও হতে পারে। পছন্দ ট্যাব আপনার নিজের তালিকা — দরকারি অংশ আলাপে তুলে দিন। এটি কখনও কিছু কেনে না — কেনেন আপনি।",
+      "pageLabel": "Personal Shopper",
+      "highlights": [
+        "কিছু সুপারিশ করার আগে সমস্যাটি বোঝে — কখনও উত্তরটা কেনা নয়",
+        "দরকারি পছন্দগুলো আলাপে তুলে দিন — পরামর্শদাতা আপনার বার্তা পড়ে, পছন্দ ট্যাব নয়",
+        "আপনি যে স্টোরগুলোর নাম বলেন কেবল সেগুলোই দেখে, আর জানিয়ে দেয় যে দাম সর্বজনীন পেজ থেকে, আপনার অ্যাকাউন্ট থেকে নয়",
+        "কার্ট বা চেকআউট পর্যন্ত পৌঁছানোর কোনো উপায়ই এর নেই",
+        "পছন্দ ট্যাবে সংরক্ষণ করা পছন্দগুলো দলে সাজিয়ে নিন"
+      ]
+    },
+    "de": {
+      "displayName": "Personal Shopper",
+      "description": "Ein persönlicher Berater, der echte Shops recherchiert und Probleme löst, die nicht zwangsläufig in einem Kauf enden. Der Tab Vorlieben ist Ihre eigene Referenzliste – schreiben Sie das Wichtige in den Chat. Er kauft nie etwas – das tun Sie.",
+      "pageLabel": "Personal Shopper",
+      "highlights": [
+        "Analysiert das Problem, bevor er etwas empfiehlt – manchmal ist die Antwort gar kein Kauf",
+        "Schreiben Sie die wichtigen Vorlieben in den Chat – der Berater liest Ihre Nachrichten, nicht den Tab Vorlieben",
+        "Recherchiert nur die Shops, die Sie nennen, und weist darauf hin, dass Preise von öffentlichen Seiten kommen und nicht aus Ihrem Konto",
+        "Er kann Warenkorb und Kasse gar nicht erreichen",
+        "Ordnen Sie Ihre gespeicherten Vorlieben im Tab Vorlieben in Gruppen"
+      ]
+    },
+    "es": {
+      "displayName": "Personal Shopper",
+      "description": "Un asesor personal que investiga tiendas reales y ayuda a resolver problemas que puede que no terminen en una compra. La pestaña Preferencias es tu propia lista de referencia: pega en el chat lo que importe. Nunca compra nada: eso lo haces tú.",
+      "pageLabel": "Personal Shopper",
+      "highlights": [
+        "Diagnostica el problema antes de recomendar nada: a veces la respuesta no es una compra",
+        "Pega en el chat las preferencias que importen: el asesor lee tus mensajes, no la pestaña Preferencias",
+        "Investiga solo las tiendas que le nombres, y avisa de que los precios vienen de páginas públicas, no de tu cuenta",
+        "No tiene forma de llegar al carrito ni al pago",
+        "Organiza tus preferencias guardadas en grupos en la pestaña Preferencias"
+      ]
+    },
+    "fr": {
+      "displayName": "Personal Shopper",
+      "description": "Un conseiller personnel qui fait des recherches sur de vraies boutiques et aide à résoudre des problèmes qui ne finissent pas forcément par un achat. L'onglet Préférences est votre liste de référence : collez l'essentiel dans le chat. Il n'achète jamais rien : c'est vous qui achetez.",
+      "pageLabel": "Personal Shopper",
+      "highlights": [
+        "Diagnostique le problème avant de recommander quoi que ce soit – parfois la réponse n'est pas un achat",
+        "Collez dans le chat les préférences qui comptent : le conseiller lit vos messages, pas l'onglet Préférences",
+        "Ne consulte que les boutiques que vous nommez, et signale que les prix viennent de pages publiques, pas de votre compte",
+        "Il n'a aucun moyen d'atteindre un panier ou un paiement",
+        "Organisez vos préférences enregistrées en groupes dans l'onglet Préférences"
+      ]
+    },
+    "hi": {
+      "displayName": "Personal Shopper",
+      "description": "एक निजी सलाहकार जो असली स्टोर की जानकारी जुटाता है और उन समस्याओं को हल करने में मदद करता है जिनका अंत खरीद पर होना ज़रूरी नहीं। पसंद टैब तुम्हारी अपनी सूची है — ज़रूरी बातें चैट में चिपकाओ। यह कभी कुछ नहीं खरीदता — खरीदते तुम हो।",
+      "pageLabel": "Personal Shopper",
+      "highlights": [
+        "कुछ सुझाने से पहले समस्या समझता है — कभी-कभी जवाब खरीदना नहीं होता",
+        "ज़रूरी पसंद चैट में चिपकाओ — सलाहकार तुम्हारे संदेश पढ़ता है, पसंद टैब नहीं",
+        "सिर्फ़ उन्हीं स्टोर को देखता है जिनका नाम तुम लेते हो, और बताता है कि दाम सार्वजनिक पेज से हैं, तुम्हारे खाते से नहीं",
+        "कार्ट या चेकआउट तक पहुँचने का इसके पास कोई रास्ता ही नहीं है",
+        "पसंद टैब में अपनी सहेजी हुई पसंद को समूहों में बाँटो"
+      ]
+    },
+    "it": {
+      "displayName": "Personal Shopper",
+      "description": "Un consulente personale che fa ricerche su negozi reali e aiuta a risolvere problemi che non sempre finiscono in un acquisto. La scheda Preferenze è il tuo elenco di riferimento: incolla nella chat ciò che conta. Non compra mai nulla: lo fai tu.",
+      "pageLabel": "Personal Shopper",
+      "highlights": [
+        "Analizza il problema prima di consigliare qualcosa: a volte la risposta non è un acquisto",
+        "Incolla nella chat le preferenze che contano: il consulente legge i tuoi messaggi, non la scheda Preferenze",
+        "Consulta solo i negozi che gli indichi, e segnala che i prezzi vengono da pagine pubbliche, non dal tuo account",
+        "Non ha alcun modo di raggiungere carrello o pagamento",
+        "Organizza le preferenze salvate in gruppi nella scheda Preferenze"
+      ]
+    },
+    "ja": {
+      "displayName": "Personal Shopper",
+      "description": "実際のストアを調べ、購入で終わるとは限らない問題の解決を手伝うパーソナルアドバイザーです。「好み」タブはあなた用の参照リストで、大事なものはチャットに貼ってください。購入は一切行いません — 決めるのはあなたです。",
+      "pageLabel": "Personal Shopper",
+      "highlights": [
+        "何かを薦める前に問題を見極めます — 買わないことが答えの場合もあります",
+        "大事な好みはチャットに貼ってください — アドバイザーが読むのはあなたのメッセージで、「好み」タブではありません",
+        "あなたが挙げたストアだけを調べ、価格はアカウント経由ではなく公開ページのものだと明示します",
+        "カートや決済に到達する手段をそもそも持ちません",
+        "保存した好みは「好み」タブでグループに整理できます"
+      ]
+    },
+    "ko": {
+      "displayName": "Personal Shopper",
+      "description": "실제 스토어를 조사하고, 구매로 끝나지 않을 수도 있는 문제의 해결을 돕는 개인 어드바이저입니다. 취향 탭은 사용자용 참조 목록이며, 중요한 항목은 채팅에 붙여 주세요. 절대 직접 구매하지 않습니다 — 구매는 사용자가 합니다.",
+      "pageLabel": "Personal Shopper",
+      "highlights": [
+        "무언가를 추천하기 전에 문제를 먼저 진단합니다 — 답이 구매가 아닐 때도 있습니다",
+        "중요한 취향은 채팅에 붙여 주세요 — 어드바이저가 읽는 것은 대화이며 취향 탭이 아닙니다",
+        "사용자가 지목한 스토어만 조사하고, 가격이 계정이 아니라 공개 페이지에서 나온 것임을 알려 줍니다",
+        "장바구니나 결제에 도달할 방법 자체가 없습니다",
+        "저장한 취향은 취향 탭에서 그룹으로 정리할 수 있습니다"
+      ]
+    },
+    "pt": {
+      "displayName": "Personal Shopper",
+      "description": "Um consultor pessoal que pesquisa lojas reais e ajuda a resolver problemas que podem não terminar em uma compra. A aba Preferências é a sua lista de referência — cole no chat o que importa. Ele nunca compra nada: você compra.",
+      "pageLabel": "Personal Shopper",
+      "highlights": [
+        "Diagnostica o problema antes de recomendar algo — às vezes a resposta não é uma compra",
+        "Cole no chat as preferências que importam — o consultor lê suas mensagens, não a aba Preferências",
+        "Pesquisa apenas as lojas que você indicar, e avisa que os preços vêm de páginas públicas, não da sua conta",
+        "Ele não tem como chegar ao carrinho ou ao checkout",
+        "Organize suas preferências salvas em grupos na aba Preferências"
+      ]
+    },
+    "ru": {
+      "displayName": "Personal Shopper",
+      "description": "Личный советник, который изучает реальные магазины и помогает решать задачи, которые не обязательно заканчиваются покупкой. Вкладка «Предпочтения» — ваш собственный справочный список: вставляйте важное в чат. Он никогда ничего не покупает — покупаете вы.",
+      "pageLabel": "Personal Shopper",
+      "highlights": [
+        "Сначала разбирается в задаче и только потом что-то советует — иногда покупка вовсе не нужна",
+        "Вставляйте в чат важные предпочтения — советник читает ваши сообщения, а не вкладку",
+        "Изучает только те магазины, которые вы назвали, и предупреждает, что цены взяты с общедоступных страниц, а не из вашего аккаунта",
+        "У него нет никакой возможности добраться до корзины или оплаты",
+        "Разложите сохранённые предпочтения по группам на вкладке «Предпочтения»"
+      ]
+    },
+    "zh-CN": {
+      "displayName": "Personal Shopper",
+      "description": "一位会去查真实商店资料的私人顾问，帮你解决未必以购买收场的问题。“偏好”标签页是你自己的参考清单，要紧的内容请贴进对话。它从不下单——下单的人是你。",
+      "pageLabel": "Personal Shopper",
+      "highlights": [
+        "先诊断问题再推荐——有时答案根本不是买东西",
+        "把要紧的偏好贴进对话——顾问看你的消息，不是“偏好”标签页",
+        "只查你点名的商店，并会说明价格来自公开页面，而不是你登录后看到的价格",
+        "它根本没有办法碰到购物车和结账",
+        "在“偏好”标签页里把存下来的偏好分组"
+      ]
+    }
+  }
 }

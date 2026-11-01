@@ -21,10 +21,11 @@ from unittest import mock
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer, make_mocked_request
 
+from backend import _host
 from backend import routes as routes_mod
 
 from .harness import PREFIX as _PREFIX
-from .harness import build_app, identity, make_ctx
+from .harness import FakeEmbed, LegacyCtx, build_app, identity, make_ctx
 
 _OWNER = "owner-user"
 
@@ -442,6 +443,100 @@ class TestTheSuiteHasNoSideEffects(RoutesTestCase):
             resolved.is_relative_to(Path(self._tmp).resolve()),
             f"sites.json resolved outside the tmpdir and landed at {resolved}",
         )
+
+
+class TestEmbedWorkUsesTheHostPool(unittest.IsolatedAsyncioTestCase):
+    """Embed-heavy store calls go to ``ctx.embed.run``, the host's bounded pool.
+
+    They call a synchronous embedder that can block for a long time; on the
+    shared default executor they would starve every fast offload the gateway
+    makes. A gateway without the seam still serves them, on ``to_thread``.
+    """
+
+    async def asyncSetUp(self) -> None:
+        self._tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self._tmp, True)
+
+    async def _client(self, ctx) -> TestClient:
+        self.addAsyncCleanup(routes_mod.on_shutdown, ctx)
+        app = build_app(ctx, middlewares=[identity(_OWNER, "")], owner_id=_OWNER)
+        client = TestClient(TestServer(app))
+        await client.start_server()
+        self.addAsyncCleanup(client.close)
+        return client
+
+    async def test_each_embedding_route_runs_on_the_host_pool(self) -> None:
+        embed = FakeEmbed()
+        ctx = make_ctx(Path(self._tmp), embed=embed)
+        client = await self._client(ctx)
+
+        resp = await client.post(f"{_PREFIX}/preferences", json={"text": "wide toe box"})
+        entry_id = (await resp.json())["id"]
+        resp = await client.post(f"{_PREFIX}/preferences/search", json={"query": "wide toe box"})
+        body = await resp.json()
+        await client.put(f"{_PREFIX}/preferences/{entry_id}", json={"text": "wide toe box shoes"})
+        await client.post(f"{_PREFIX}/preferences/reembed")
+        await client.get(f"{_PREFIX}/preferences")
+
+        self.assertEqual(embed.offloaded, ["add", "search", "update", "reembed_all"])
+        # The vector path served the search: the SDK's vectors reached the store.
+        self.assertTrue(body["semantic"])
+        self.assertEqual(body["results"][0]["id"], entry_id)
+
+    async def test_a_gateway_without_the_seam_ranks_by_keyword(self) -> None:
+        ctx = LegacyCtx(Path(self._tmp))
+        client = await self._client(ctx)
+        # No owner gate either, so seed through the store, then read.
+        store = await routes_mod._get_store(ctx)
+        store.add("allergic to latex")
+        resp = await client.post(f"{_PREFIX}/preferences/search", json={"query": "latex"})
+        self.assertEqual(resp.status, 200)
+        body = await resp.json()
+        self.assertFalse(body["semantic"])
+        self.assertEqual([r["text"] for r in body["results"]], ["allergic to latex"])
+
+
+class TestRouteRecordsAreStructural(unittest.TestCase):
+    """The routes hook returns the app's own records, not a host class.
+
+    A level-1 ``RouteRegistry`` accepts any object with a str ``method`` (GET,
+    POST, PUT, DELETE or PATCH), a str ``path`` and a callable ``handler``.
+    """
+
+    def test_every_record_has_the_shape_the_registry_accepts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            records = routes_mod.register_routes(make_ctx(Path(tmp)))
+        for record in records:
+            with self.subTest(route=f"{record.method} {record.path}"):
+                self.assertIsInstance(record, _host.Route)
+                self.assertIn(record.method, {"GET", "POST", "PUT", "DELETE", "PATCH"})
+                self.assertTrue(record.path.startswith("/") and len(record.path) <= 512)
+                self.assertTrue(callable(record.handler))
+
+
+class TestAnOlderGatewayIsReportedDegraded(unittest.TestCase):
+    def test_below_level_1_the_routes_still_register_and_health_says_why(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = LegacyCtx(Path(tmp))
+            records = routes_mod.register_routes(ctx)
+        self.assertEqual(len(records), 14)
+        self.assertEqual(ctx.health.status, "degraded")
+        self.assertEqual(len(ctx.health.issues), 1)
+        self.assertIn("App Kit level 1", ctx.health.issues[0])
+
+    def test_a_level_1_gateway_stays_healthy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = make_ctx(Path(tmp))
+            routes_mod.register_routes(ctx)
+        self.assertEqual((ctx.health.status, ctx.health.issues), ("healthy", []))
+
+    def test_a_context_without_health_is_tolerated(self) -> None:
+        class _Bare:
+            def __init__(self, data_dir: Path) -> None:
+                self.data_dir = data_dir
+
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(len(routes_mod.register_routes(_Bare(Path(tmp)))), 14)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,10 @@
 """Source-assertion tests for embedding offload contracts.
 
 These tests verify that specific call sites route blocking embedding work
-through the ``mc-embed`` bulkhead pool (``run_in_embed_pool``) rather than
-the shared default executor.
+through the host's ``mc-embed`` bulkhead pool (``ctx.embed.run``, reached
+through ``_host.run_embed``) rather than the shared default executor.
+``test_routes.TestEmbedWorkUsesTheHostPool`` checks the same thing by running
+the routes.
 
 The pattern mirrors ``TestWindowsTeardownOffLoop`` in ``test_mcp_discovery_probe_stdio.py``:
 assert against the shipped source rather than simulating a platform-specific
@@ -15,11 +17,11 @@ import inspect
 
 
 class TestPersonalShopperEmbedOffload:
-    """personal_shopper routes must use run_in_embed_pool for embed-heavy ops.
+    """personal_shopper routes must use the host embed pool for embed-heavy ops.
 
     ``store.add``, ``store.search``, ``store.update`` and ``store.reembed_all``
     call the synchronous embedder and block for 60-90s per invocation. These
-    MUST route through ``run_in_embed_pool`` (the bounded mc-embed bulkhead
+    MUST route through ``_host.run_embed`` (the bounded mc-embed bulkhead
     pool) instead of ``asyncio.to_thread`` (the shared default executor) so
     that embedding work cannot starve fast I/O offloads that share the default
     pool.
@@ -30,8 +32,8 @@ class TestPersonalShopperEmbedOffload:
 
         src = inspect.getsource(routes._handle_add_preference)
         assert (
-            "run_in_embed_pool" in src
-        ), "store.add must be offloaded via run_in_embed_pool, not asyncio.to_thread"
+            "_host.run_embed(" in src
+        ), "store.add must be offloaded via _host.run_embed, not asyncio.to_thread"
         assert "store.add" in src, "handler must call store.add"
 
     def test_store_search_uses_embed_pool(self) -> None:
@@ -39,8 +41,8 @@ class TestPersonalShopperEmbedOffload:
 
         src = inspect.getsource(routes._handle_search_preferences)
         assert (
-            "run_in_embed_pool" in src
-        ), "store.search must be offloaded via run_in_embed_pool, not asyncio.to_thread"
+            "_host.run_embed(" in src
+        ), "store.search must be offloaded via _host.run_embed, not asyncio.to_thread"
         assert "store.search" in src, "handler must call store.search"
 
     def test_store_reembed_all_uses_embed_pool(self) -> None:
@@ -48,8 +50,8 @@ class TestPersonalShopperEmbedOffload:
 
         src = inspect.getsource(routes._handle_reembed_preferences)
         assert (
-            "run_in_embed_pool" in src
-        ), "store.reembed_all must be offloaded via run_in_embed_pool, not asyncio.to_thread"
+            "_host.run_embed(" in src
+        ), "store.reembed_all must be offloaded via _host.run_embed, not asyncio.to_thread"
         assert "store.reembed_all" in src, "handler must call store.reembed_all"
 
     def test_store_update_uses_embed_pool(self) -> None:
@@ -64,8 +66,8 @@ class TestPersonalShopperEmbedOffload:
 
         src = inspect.getsource(routes._handle_update_preference)
         assert (
-            "run_in_embed_pool" in src
-        ), "store.update must be offloaded via run_in_embed_pool, not asyncio.to_thread"
+            "_host.run_embed(" in src
+        ), "store.update must be offloaded via _host.run_embed, not asyncio.to_thread"
         assert "store.update" in src, "handler must call store.update"
         # The premise above must stay true: update embeds on a text change.
         assert "_embed(new_text)" in inspect.getsource(

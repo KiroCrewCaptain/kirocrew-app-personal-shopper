@@ -1,56 +1,59 @@
 """Every place this app reaches into the Kiro Crew gateway, in one module.
 
-An external app's Python runs inside the gateway process, so ``kiro_crew`` is
-importable at runtime, but only a few of its names are a contract an app may
-rely on. This module holds the three the built-in needed that have no public
-App SDK seam yet. Each one is imported lazily, so a test run without Kiro Crew
-installed still works, and each has a fallback that is never MORE permissive
-than the host. PORTING.md lists them as the gaps to close in Kiro Crew.
+An external app's Python runs inside the gateway process, but the only gateway
+surface it relies on is the public App Kit one: the ``AppContext`` handed to its
+hooks, and the structural route records ``RouteRegistry`` accepts. Nothing here
+imports ``kiro_crew`` (``tests/test_no_host_imports.py`` pins that), so the app
+does not break when a wheel moves a private module.
 
-1. ``AppRoute``: the record type ``hooks.routes`` must return. The gateway's
-   ``RouteRegistry`` checks ``isinstance(route, AppRoute)`` against its own
-   class, so inside a gateway the real one must be used. Outside one, a local
-   dataclass with the same three fields stands in.
-2. The owner gate. The built-in called the dashboard's private
-   ``require_owner_dashboard_request``. Inside a gateway that is still what
-   runs. The fallback admits only a caller whose subject equals the configured
-   ``owner_id``, and refuses everyone when no owner is configured.
-3. The embedding bulkhead pool (``run_in_embed_pool``). The fallback is
-   ``asyncio.to_thread``, which is what the default pool would do anyway.
+The seams this app needs arrived together at App Kit level 1. Each is read off
+the context with ``getattr``, and each has a fallback for a gateway without it
+that is never MORE permissive than the host:
+
+1. Routes: a local frozen dataclass with ``method`` / ``path`` / ``handler``.
+   A level-1 ``RouteRegistry`` accepts any object of that shape.
+2. ``ctx.require_owner(request, operation)``: the host's own owner gate, which
+   audits a denial as ``<app>.<operation>``. Without it every caller is
+   refused, the owner included (fail closed).
+3. ``ctx.embed``: the host's shared embedder and its bounded embed pool.
+   Without it embedding work runs on ``asyncio.to_thread`` and the store has no
+   embedder, so it ranks by keyword, a path it already supports.
+
+``register_routes`` reports a gateway below level 1 through ``ctx.health`` so
+the operator sees why writes are refused and search is keyword-only.
 """
 
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
 from aiohttp import web
 
-logger = logging.getLogger(__name__)
+#: The App Kit seam level this app is written against.
+REQUIRED_SDK_LEVEL = 1
+
+Handler = Callable[[web.Request, Any], Awaitable[web.StreamResponse]]
 
 
-@dataclass
-class _LocalAppRoute:
-    """Same shape as ``kiro_crew.apps.route_registry.AppRoute``."""
+@dataclass(frozen=True)
+class Route:
+    """One ``hooks.routes`` record, accepted structurally by the gateway."""
 
     method: str
     path: str
-    handler: Callable[[web.Request, Any], Awaitable[web.Response]]
+    handler: Handler
 
 
-def _app_route_class() -> type:
-    try:
-        from kiro_crew.apps.route_registry import AppRoute
-    except ImportError:
-        return _LocalAppRoute
-    return AppRoute
+def app_route(method: str, path: str, handler: Handler) -> Route:
+    return Route(method, path, handler)
 
 
-def app_route(method: str, path: str, handler: Callable[..., Any]) -> Any:
-    """Build one route record of the class the running host accepts."""
-    return _app_route_class()(method, path, handler)
+def sdk_level(ctx: Any) -> int:
+    """The seam level the gateway reports; 0 for a gateway that predates the field."""
+    level = getattr(ctx, "sdk_level", 0)
+    return level if isinstance(level, int) and not isinstance(level, bool) else 0
 
 
 def _owner_denied() -> web.Response:
@@ -59,40 +62,41 @@ def _owner_denied() -> web.Response:
     )
 
 
-def _fallback_is_owner(request: web.Request) -> bool:
-    """The host's owner predicate minus its implicit local subjects.
+async def require_owner(
+    ctx: Any, request: web.Request, operation: str
+) -> web.StreamResponse | None:
+    """``None`` when the caller is the dashboard owner, else the refusal to return.
 
-    The host also accepts two bootstrap subjects when no ``owner_id`` is set.
-    This fallback does not, so outside a gateway it only ever refuses MORE.
+    *operation* is bare (``"add_preference"``): the host prefixes the app's own
+    name when it audits a denial. A gateway without the seam refuses everyone.
     """
-    state = request.app.get("state") if hasattr(request.app, "get") else None
-    owner_id = str(getattr(state, "owner_id", "") or "")
-    caller = str(request.get("user") or "")
-    if "app" not in request or request["app"] != "" or not caller:
-        return False
-    return bool(owner_id) and caller == owner_id
+    gate = getattr(ctx, "require_owner", None)
+    if not callable(gate):
+        return _owner_denied()
+    return await gate(request, operation)
 
 
-async def require_owner(request: web.Request, operation: str) -> web.Response | None:
-    """``None`` when the caller is the dashboard owner, else a 403 ``owner_only``."""
-    try:
-        from kiro_crew.dashboard.handlers._shared import (
-            require_owner_dashboard_request,
-        )
-    except ImportError:
-        return None if _fallback_is_owner(request) else _owner_denied()
-    return await require_owner_dashboard_request(request, operation)
+def embedder(ctx: Any) -> Any | None:
+    """The host's embed SDK, or ``None`` when the gateway has none.
+
+    Only an object with both calls the store makes counts, so a gateway whose
+    ``embed`` field means something else degrades to keyword search instead of
+    raising on the first stored preference.
+    """
+    sdk = getattr(ctx, "embed", None)
+    calls = (getattr(sdk, "available", None), getattr(sdk, "embed_sync", None))
+    return sdk if all(callable(call) for call in calls) else None
 
 
-async def run_in_embed_pool(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+async def run_embed(ctx: Any, func: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Any:
     """Run embedding work on the host's bounded embed pool when there is one.
 
     ``store.add`` / ``search`` / ``update`` / ``reembed_all`` call a synchronous
     embedder that can block for a long time, so inside a gateway they must not
     occupy the shared default executor that every other offload uses.
     """
-    try:
-        from kiro_crew.executors import run_in_embed_pool as host_pool
-    except ImportError:
-        return await asyncio.to_thread(func, *args, **kwargs)
-    return await host_pool(func, *args, **kwargs)
+    sdk = getattr(ctx, "embed", None)
+    run = getattr(sdk, "run", None)
+    if callable(run):
+        return await run(func, *args, **kwargs)
+    return await asyncio.to_thread(func, *args, **kwargs)

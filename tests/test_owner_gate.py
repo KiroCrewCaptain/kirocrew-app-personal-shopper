@@ -5,11 +5,11 @@ dashboard owner, or it gets a 403 ``owner_only`` before any store or sites.json
 write. An app token keeps its access: the token middleware has already confined
 it to the routes its manifest grants. Reads stay open.
 
-Without Kiro Crew installed these exercise the fallback gate in
-``backend/_host.py``, which admits only a caller equal to the configured
-``owner_id``. Inside a gateway the host's own gate runs instead; the last case
-pins that the fallback refuses everyone when no owner is configured, so it can
-never be more permissive than the host.
+The gate itself is the host's (``ctx.require_owner``); ``FakeCtx`` stands in for
+it, admitting only the configured ``owner_id``. What these pin is the app's half:
+which routes ask, with which operation name, that the host's refusal is returned
+unchanged, and that a gateway without the seam refuses every write, the owner's
+included (fail closed).
 
 No network: the store stays on its keyword path. All writes land in a tmpdir.
 """
@@ -22,15 +22,13 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
+from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
-from backend import _host
 from backend import routes as routes_mod
-from backend import store as store_mod
 
-from .harness import PREFIX, build_app, identity, make_ctx
+from .harness import PREFIX, LegacyCtx, build_app, identity, make_ctx
 
 OWNER = "owner-1"
 NON_OWNER = "allowlisted-2"
@@ -60,9 +58,6 @@ class OwnerGateTestCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self._tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self._tmp, True)
-        patcher = mock.patch.object(store_mod, "get_shared_embedder", None)
-        patcher.start()
-        self.addCleanup(patcher.stop)
         self.ctx = make_ctx(self._tmp)
         self.addAsyncCleanup(routes_mod.on_shutdown, self.ctx)
 
@@ -91,9 +86,11 @@ class OwnerGateTestCase(unittest.IsolatedAsyncioTestCase):
         return rows, self.sites_file.read_bytes()
 
     async def request(
-        self, method: str, path: str, body, *, user: str, app, owner_id: str = OWNER
+        self, method: str, path: str, body, *, user: str, app, owner_id: str = OWNER, ctx=None
     ) -> tuple[int, dict]:
-        server_app = build_app(self.ctx, middlewares=[identity(user, app)], owner_id=owner_id)
+        server_app = build_app(
+            ctx or self.ctx, middlewares=[identity(user, app)], owner_id=owner_id
+        )
         async with TestClient(TestServer(server_app)) as client:
             resp = await client.request(method, PREFIX + path.format(**self.ids), json=body)
             return resp.status, await resp.json()
@@ -116,8 +113,20 @@ class TestWritesAreOwnerOnly(OwnerGateTestCase):
                 self.assertEqual((status, payload.get("code")), (403, "owner_only"))
                 self.assertEqual(self.snapshot(), before)
 
+    async def test_the_host_refusal_is_what_the_caller_gets(self) -> None:
+        """The gate's own response is returned as is, not rewritten to a 403."""
+        self.ctx.refusal = lambda: web.json_response(
+            {"error": "session predates the owner", "code": "auth_required"}, status=401
+        )
+        before = self.snapshot()
+        status, payload = await self.request(
+            "POST", "/groups", {"name": "Planted"}, user=NON_OWNER, app=""
+        )
+        self.assertEqual((status, payload.get("code")), (401, "auth_required"))
+        self.assertEqual(self.snapshot(), before)
+
     async def test_no_configured_owner_refuses_every_dashboard_write(self) -> None:
-        """The fallback has no implicit owner, so it fails closed."""
+        """The gate has no implicit owner here, so it fails closed."""
         for method, path, body in MUTATIONS:
             with self.subTest(route=f"{method} {path}"):
                 before = self.snapshot()
@@ -156,27 +165,47 @@ class TestWritesAreOwnerOnly(OwnerGateTestCase):
                 self.assertEqual(status, 200)
 
 
-class TestHostGateIsPreferred(OwnerGateTestCase):
-    async def test_the_host_gate_decides_when_kiro_crew_is_importable(self) -> None:
-        """Inside a gateway the host's gate must run, not the local fallback."""
-        calls: list[str] = []
+class TestTheHostGateDecides(OwnerGateTestCase):
+    async def test_every_write_asks_the_host_gate_with_its_bare_operation(self) -> None:
+        """The host prefixes the app name when it audits, so the app passes it bare."""
+        expected = [
+            "add_preference",
+            "update_preference",
+            "delete_preference",
+            "reembed_preferences",
+            "add_group",
+            "delete_group",
+            "add_history",
+            "update_feedback",
+            "put_sites",
+        ]
+        for (method, path, body), operation in zip(MUTATIONS, expected):
+            with self.subTest(route=f"{method} {path}"):
+                self.ctx.owner_checks.clear()
+                await self.request(method, path, body, user=NON_OWNER, app="")
+                self.assertEqual(self.ctx.owner_checks, [operation])
 
-        async def host_gate(request, operation):
-            calls.append(operation)
-            return None
+    async def test_reads_and_app_tokens_never_ask(self) -> None:
+        for method, path, body in READS:
+            await self.request(method, path, body, user=NON_OWNER, app="")
+        await self.request("POST", "/groups", {"name": "Token"}, user="app:x", app="x")
+        self.assertEqual(self.ctx.owner_checks, [])
 
-        fake = mock.MagicMock(require_owner_dashboard_request=host_gate)
-        # Only the leaf module: a ``from a.b.c import x`` is served straight from
-        # ``sys.modules[a.b.c]``, and leaving ``kiro_crew`` itself absent keeps
-        # the AppRoute import on its local fallback, as in every other test.
-        with mock.patch.dict("sys.modules", {"kiro_crew.dashboard.handlers._shared": fake}):
-            # A non-owner the fallback would refuse is admitted, so the host ran.
-            status, _ = await self.request(
-                "POST", "/groups", {"name": "Via host"}, user=NON_OWNER, app=""
-            )
-        self.assertEqual(status, 201)
-        self.assertEqual(calls, ["personal_shopper.add_group"])
-        self.assertTrue(callable(_host.require_owner))
+    async def test_a_gateway_without_the_seam_refuses_every_write(self) -> None:
+        """Below App Kit level 1 there is no owner gate to call, so nobody writes."""
+        legacy = LegacyCtx(self._tmp)
+        for method, path, body in MUTATIONS:
+            with self.subTest(route=f"{method} {path}"):
+                before = self.snapshot()
+                status, payload = await self.request(
+                    method, path, body, user=OWNER, app="", ctx=legacy
+                )
+                self.assertEqual((status, payload.get("code")), (403, "owner_only"))
+                self.assertEqual(self.snapshot(), before)
+        for method, path, body in READS:
+            with self.subTest(route=f"{method} {path}"):
+                status, _ = await self.request(method, path, body, user=OWNER, app="", ctx=legacy)
+                self.assertEqual(status, 200)
 
 
 if __name__ == "__main__":

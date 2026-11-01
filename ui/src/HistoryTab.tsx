@@ -9,12 +9,11 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Clock, Lightbulb, Search, ShoppingCart, SkipForward, ThumbsUp } from 'lucide-react'
-import * as shopApi from './api'
-import { EmptyState, Input } from '../../components/ui'
-import ErrorNotice from '../../components/ErrorNotice'
+import { EmptyState, ErrorNotice, Input } from '@kirocrew/app-sdk/ui'
+import { useShopApi, type ShopApi } from './api'
+import { fmtCurrency } from './hostSdk'
+import { t } from './i18n'
 
-import { i18nT } from '../../i18n/t'
-import { fmtCurrency } from '../../i18n/format'
 // ── Types ──
 
 interface HistorySession {
@@ -29,11 +28,11 @@ interface HistorySession {
 
 // ── API ──
 
-async function fetchHistory(limit = 20): Promise<{ sessions: HistorySession[] }> {
+async function fetchHistory(shopApi: ShopApi, limit = 20): Promise<{ sessions: HistorySession[] }> {
   return shopApi.get(`/history?limit=${limit}`)
 }
 
-async function updateFeedback(historyId: string, product: string, feedback: string): Promise<void> {
+async function updateFeedback(shopApi: ShopApi, historyId: string, product: string, feedback: string): Promise<void> {
   await shopApi.put(`/history/${historyId}/feedback`, { product, feedback })
 }
 
@@ -41,16 +40,17 @@ async function updateFeedback(historyId: string, product: string, feedback: stri
 
 export function HistoryTab() {
   const queryClient = useQueryClient()
+  const shopApi = useShopApi()
   const [searchQuery, setSearchQuery] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['personal-shopper', 'history'],
-    queryFn: () => fetchHistory(),
+    queryFn: () => fetchHistory(shopApi),
   })
 
   const feedbackMutation = useMutation({
     mutationFn: ({ historyId, product, feedback }: { historyId: string; product: string; feedback: string }) =>
-      updateFeedback(historyId, product, feedback),
+      updateFeedback(shopApi, historyId, product, feedback),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['personal-shopper', 'history'] }),
   })
 
@@ -67,7 +67,7 @@ export function HistoryTab() {
     : sessions
 
   if (isLoading) {
-    return <div className="text-sm text-[var(--muted)] py-8 text-center">{i18nT('apps.personalShopper.historyTab.loading_history')}</div>
+    return <div className="text-sm text-[var(--muted)] py-8 text-center">{t('historyTab.loading_history')}</div>
   }
 
   return (
@@ -78,7 +78,7 @@ export function HistoryTab() {
         <Input
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={i18nT('apps.personalShopper.historyTab.search_past_sessions')}
+          placeholder={t('historyTab.search_past_sessions')}
           className="pl-8"
         />
       </div>
@@ -87,15 +87,15 @@ export function HistoryTab() {
       {sessions.length === 0 && (
         <EmptyState
           icon={<Clock size={28} />}
-          title={i18nT('apps.personalShopper.historyTab.no_history_yet')}
-          subtitle={i18nT('apps.personalShopper.historyTab.your_past_advisor_conversations_and_recommendati')}
+          title={t('historyTab.no_history_yet')}
+          subtitle={t('historyTab.your_past_advisor_conversations_and_recommendati')}
         />
       )}
 
       {/* No search results */}
       {sessions.length > 0 && filtered.length === 0 && (
         <p className="text-sm text-[var(--muted)] py-4 text-center">
-          {i18nT('apps.personalShopper.historyTab.no_sessions_matching', { query: searchQuery })}
+          {t('historyTab.no_sessions_matching', { query: searchQuery })}
         </p>
       )}
 
@@ -162,7 +162,7 @@ function SessionCard({
       {session.products.length === 0 && session.advice && (
         <div className="flex items-center justify-center gap-1.5 text-[11px] text-[var(--muted)] mt-2 px-2 py-2 rounded bg-[var(--bg-elevated)]">
           <Lightbulb size={12} />
-          {i18nT('apps.personalShopper.historyTab.no_products_recommended_advice_was_the_solution')}
+          {t('historyTab.no_products_recommended_advice_was_the_solution')}
         </div>
       )}
     </div>
@@ -205,24 +205,24 @@ function ProductRow({
           <button
             onClick={() => { onFeedback('liked'); setEditing(false) }}
             className="p-1 rounded hover:bg-[var(--ok-subtle)] text-[var(--muted)] hover:text-[var(--ok)] transition-colors"
-            title={i18nT('apps.personalShopper.historyTab.liked')}
-            aria-label={i18nT('apps.personalShopper.historyTab.mark_liked')}
+            title={t('historyTab.liked')}
+            aria-label={t('historyTab.mark_liked')}
           >
             <ThumbsUp size={12} />
           </button>
           <button
             onClick={() => { onFeedback('purchased'); setEditing(false) }}
             className="p-1 rounded hover:bg-[var(--accent-subtle)] text-[var(--muted)] hover:text-[var(--accent)] transition-colors"
-            title={i18nT('apps.personalShopper.historyTab.purchased')}
-            aria-label={i18nT('apps.personalShopper.historyTab.mark_purchased')}
+            title={t('historyTab.purchased')}
+            aria-label={t('historyTab.mark_purchased')}
           >
             <ShoppingCart size={12} />
           </button>
           <button
             onClick={() => { onFeedback('skipped'); setEditing(false) }}
             className="p-1 rounded hover:bg-[var(--bg-hover)] text-[var(--muted)] transition-colors"
-            title={i18nT('apps.personalShopper.historyTab.skipped')}
-            aria-label={i18nT('apps.personalShopper.historyTab.mark_skipped')}
+            title={t('historyTab.skipped')}
+            aria-label={t('historyTab.mark_skipped')}
           >
             <SkipForward size={12} />
           </button>
@@ -244,17 +244,17 @@ function FeedbackBadge({ feedback, onEdit }: { feedback: string; onEdit: () => v
     { labelKey: string; icon: typeof ThumbsUp; className: string }
   > = {
     purchased: {
-      labelKey: 'apps.personalShopper.historyTab.purchased',
+      labelKey: 'historyTab.purchased',
       icon: ShoppingCart,
       className: 'bg-[var(--accent-subtle)] text-[var(--accent)]',
     },
     liked: {
-      labelKey: 'apps.personalShopper.historyTab.liked',
+      labelKey: 'historyTab.liked',
       icon: ThumbsUp,
       className: 'bg-[var(--ok-subtle)] text-[var(--ok)]',
     },
     skipped: {
-      labelKey: 'apps.personalShopper.historyTab.skipped',
+      labelKey: 'historyTab.skipped',
       icon: SkipForward,
       className: 'bg-[var(--bg-elevated)] text-[var(--muted)]',
     },
@@ -262,14 +262,14 @@ function FeedbackBadge({ feedback, onEdit }: { feedback: string; onEdit: () => v
 
   const c = config[feedback] ?? config.skipped
   const Icon = c.icon
-  const label = i18nT(c.labelKey)
+  const label = t(c.labelKey)
 
   return (
     <button
       type="button"
       onClick={onEdit}
-      title={i18nT('apps.personalShopper.historyTab.change_feedback')}
-      aria-label={i18nT('apps.personalShopper.historyTab.change_feedback')}
+      title={t('historyTab.change_feedback')}
+      aria-label={t('historyTab.change_feedback')}
       className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium transition-opacity hover:opacity-80 ${c.className}`}
     >
       <Icon size={10} />

@@ -8,12 +8,11 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Globe, Plus, Trash2 } from 'lucide-react'
-import * as shopApi from './api'
-import { Btn, EmptyState, Input } from '../../components/ui'
-import ErrorNotice from '../../components/ErrorNotice'
+import { useImeGuard } from '@kirocrew/app-sdk'
+import { Btn, EmptyState, ErrorNotice, Input } from '@kirocrew/app-sdk/ui'
+import { useShopApi, type ShopApi } from './api'
+import { t } from './i18n'
 
-import { i18nT } from '../../i18n/t'
-import { useImeGuard } from '../../hooks/useImeGuard'
 // ── Types ──
 
 interface Site {
@@ -32,11 +31,11 @@ interface SitesData {
 
 // ── API ──
 
-async function fetchSites(): Promise<SitesData> {
+async function fetchSites(shopApi: ShopApi): Promise<SitesData> {
   return shopApi.get('/sites')
 }
 
-async function saveSites(data: SitesData): Promise<void> {
+async function saveSites(shopApi: ShopApi, data: SitesData): Promise<void> {
   await shopApi.put('/sites', data)
 }
 
@@ -45,6 +44,7 @@ async function saveSites(data: SitesData): Promise<void> {
 export function SitesTab() {
   const ime = useImeGuard()
   const queryClient = useQueryClient()
+  const shopApi = useShopApi()
   const [showAddForm, setShowAddForm] = useState(false)
   const [newName, setNewName] = useState('')
   const [newUrl, setNewUrl] = useState('')
@@ -53,7 +53,7 @@ export function SitesTab() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['personal-shopper', 'sites'],
-    queryFn: fetchSites,
+    queryFn: () => fetchSites(shopApi),
     // add/remove send a replace-all PUT built from this cache, so a stale cache
     // would erase a site added from another tab. Finite staleTime lets
     // focus-refetch fire here (global default is Infinity).
@@ -61,7 +61,7 @@ export function SitesTab() {
   })
 
   const mutation = useMutation({
-    mutationFn: saveSites,
+    mutationFn: (next: SitesData) => saveSites(shopApi, next),
     onMutate: () => setErrorCode(null),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['personal-shopper', 'sites'] }),
     // Without this the UI showed nothing at all on failure: a rejected save left
@@ -116,7 +116,7 @@ export function SitesTab() {
   }
 
   if (isLoading) {
-    return <div className="text-sm text-[var(--muted)] py-8 text-center">{i18nT('apps.personalShopper.sitesTab.loading_sites')}</div>
+    return <div className="text-sm text-[var(--muted)] py-8 text-center">{t('sitesTab.loading_sites')}</div>
   }
 
   return (
@@ -128,13 +128,13 @@ export function SitesTab() {
         role="note"
         className="text-sm px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text)] leading-relaxed"
       >
-        {i18nT('apps.personalShopper.sitesTab.shopping_sources_the_advisor_can_browse_login_en')}
+        {t('sitesTab.shopping_sources_the_advisor_can_browse_login_en')}
       </p>
 
       {/* The hand-off is offered only while the site form's name and URL are
           empty: a rejected add is exactly when they are still typed here. */}
       <ErrorNotice
-        message={errorCode ? i18nT('apps.personalShopper.sitesTab.save_failed', { code: errorCode }) : null}
+        message={errorCode ? t('sitesTab.save_failed', { code: errorCode }) : null}
         askAgent={!newName && !newUrl}
       />
 
@@ -142,8 +142,8 @@ export function SitesTab() {
       {sites.length === 0 && !showAddForm && (
         <EmptyState
           icon={<Globe size={28} />}
-          title={i18nT('apps.personalShopper.sitesTab.no_sites_configured')}
-          subtitle={i18nT('apps.personalShopper.sitesTab.add_your_shopping_sites_so_the_advisor_can_brows')}
+          title={t('sitesTab.no_sites_configured')}
+          subtitle={t('sitesTab.add_your_shopping_sites_so_the_advisor_can_brows')}
         />
       )}
 
@@ -175,8 +175,8 @@ export function SitesTab() {
             onClick={() => removeSite(site.id)}
             disabled={busy}
             className="opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 focus-visible:opacity-100 text-[var(--muted)] hover:text-[var(--danger)] disabled:opacity-30 [@media(hover:none)]:disabled:opacity-30 transition-all flex-shrink-0"
-            title={i18nT('apps.personalShopper.sitesTab.remove_site')}
-            aria-label={i18nT('apps.personalShopper.sitesTab.remove_named_site', { name: site.name })}
+            title={t('sitesTab.remove_site')}
+            aria-label={t('sitesTab.remove_named_site', { name: site.name })}
           >
             <Trash2 size={14} />
           </button>
@@ -189,21 +189,21 @@ export function SitesTab() {
           <Input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder={i18nT('apps.personalShopper.sitesTab.site_name_e_g_example_store')}
+            placeholder={t('sitesTab.site_name_e_g_example_store')}
             autoFocus
           />
           <Input
             value={newUrl}
             onChange={(e) => setNewUrl(e.target.value)}
-            placeholder={i18nT('apps.personalShopper.sitesTab.url_e_g_store_example_com')}
+            placeholder={t('sitesTab.url_e_g_store_example_com')}
             {...ime.bindEnter({ onEnter: addSite })}
           />
           <div className="flex gap-2">
             <Btn onClick={addSite} disabled={!newName.trim() || !newUrl.trim()}>
-              {i18nT('apps.personalShopper.sitesTab.add_site')}
+              {t('sitesTab.add_site')}
             </Btn>
             <Btn onClick={() => { setShowAddForm(false); setNewName(''); setNewUrl('') }}>
-              {i18nT('apps.personalShopper.sitesTab.cancel')}
+              {t('sitesTab.cancel')}
             </Btn>
           </div>
         </div>
@@ -212,17 +212,17 @@ export function SitesTab() {
           onClick={() => setShowAddForm(true)}
           className="flex items-center gap-1.5 text-xs text-[var(--muted)] hover:text-[var(--accent)] transition-colors"
         >
-          <Plus size={14} /> {i18nT('apps.personalShopper.sitesTab.add_shopping_site')}
+          <Plus size={14} /> {t('sitesTab.add_shopping_site')}
         </button>
       )}
 
       {/* Info box */}
       <div className="text-[11px] text-[var(--muted)] mt-4 p-3 rounded-lg bg-[var(--bg-elevated)] leading-relaxed space-y-2">
         <p>
-          <strong>{i18nT('apps.personalShopper.sitesTab.how_login_works')}</strong> {i18nT('apps.personalShopper.sitesTab.the_advisor_opens_sites_in_the_browser_panel_dur')}
+          <strong>{t('sitesTab.how_login_works')}</strong> {t('sitesTab.the_advisor_opens_sites_in_the_browser_panel_dur')}
         </p>
         <p>
-          <strong>{i18nT('apps.personalShopper.sitesTab.privacy')}</strong> {i18nT('apps.personalShopper.sitesTab.the_advisor_only_visits_sites_you_ve_enabled_her')}
+          <strong>{t('sitesTab.privacy')}</strong> {t('sitesTab.the_advisor_only_visits_sites_you_ve_enabled_her')}
         </p>
       </div>
     </div>

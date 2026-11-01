@@ -1,15 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor, fireEvent, within } from '@testing-library/react'
-import { PreferencesTab } from '../apps/personal-shopper/PreferencesTab'
+import { PreferencesTab } from '../src/PreferencesTab'
 import { renderWithProviders } from './helpers'
-import * as shopApi from '../apps/personal-shopper/api'
 
-vi.mock('../apps/personal-shopper/api', () => ({
+// The tab's only I/O is the scoped client from `useShopApi()`; every call is
+// answered here, so nothing reaches a network.
+const shopApi = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
   put: vi.fn(),
   del: vi.fn(),
 }))
+
+vi.mock('../src/api', () => ({ useShopApi: () => shopApi }))
 
 interface Pref {
   id: string
@@ -38,10 +41,10 @@ const mkPref = (id: string, text: string, tags: string[] = []): Pref => ({
 
 const mkGroup = (id: string, name: string, sort_order = 0): Grp => ({ id, name, icon: '', sort_order })
 
-const mockGet = vi.mocked(shopApi.get)
-const mockPost = vi.mocked(shopApi.post)
-const mockPut = vi.mocked(shopApi.put)
-const mockDel = vi.mocked(shopApi.del)
+const mockGet = shopApi.get
+const mockPost = shopApi.post
+const mockPut = shopApi.put
+const mockDel = shopApi.del
 
 /** Answer both queries the tab fires, so neither resolves undefined. */
 function seed({ preferences = [] as Pref[], groups = [] as Grp[] } = {}) {
@@ -80,6 +83,15 @@ const deletePrefBtn = (text: string) =>
 
 beforeEach(() => {
   vi.clearAllMocks()
+})
+
+it('uses the host dropdown and caution marker on a level-1 host', async () => {
+  seed({ preferences: [mkPref('p1', 'wide toe box', ['g1'])], groups: [mkGroup('g1', 'Footwear')] })
+  renderWithProviders(<PreferencesTab />)
+  const trigger = await screen.findByRole('combobox', { name: 'Assign to group' })
+  expect(trigger).toHaveAttribute('data-host-select')
+  expect(screen.getByRole('button', { name: 'Delete group Footwear' })).toHaveAttribute('data-guide-caution')
+  expect(deletePrefBtn('wide toe box')).toHaveAttribute('data-guide-caution')
 })
 
 // ── Query states ───────────────────────────────────────────────────────────
@@ -227,8 +239,7 @@ describe('PreferencesTab — adding a preference', () => {
     seed({ groups: [mkGroup('g1', 'Footwear')] })
     renderWithProviders(<PreferencesTab />)
     const trigger = await screen.findByRole('combobox', { name: 'Assign to group' })
-    fireEvent.click(trigger)
-    fireEvent.click(await screen.findByRole('option', { name: 'Footwear' }))
+    fireEvent.change(trigger, { target: { value: 'g1' } })
     fireEvent.change(prefInput(), { target: { value: 'wide toe box' } })
     fireEvent.submit(formOf(prefInput()))
     await waitFor(() =>
@@ -240,10 +251,9 @@ describe('PreferencesTab — adding a preference', () => {
     seed({ groups: [mkGroup('g1', 'Footwear')] })
     renderWithProviders(<PreferencesTab />)
     const trigger = await screen.findByRole('combobox', { name: 'Assign to group' })
-    fireEvent.click(trigger)
-    fireEvent.click(await screen.findByRole('option', { name: 'Footwear' }))
-    fireEvent.click(trigger)
-    fireEvent.click(await screen.findByRole('option', { name: 'No group' }))
+    expect(within(trigger).getByRole('option', { name: 'No group' })).toBeInTheDocument()
+    fireEvent.change(trigger, { target: { value: 'g1' } })
+    fireEvent.change(trigger, { target: { value: '' } })
     fireEvent.change(prefInput(), { target: { value: 'no wool' } })
     fireEvent.submit(formOf(prefInput()))
     await waitFor(() =>

@@ -1,9 +1,10 @@
 """Personal Shopper — backend API routes, as an external app's ``hooks.routes``.
 
-``register_routes(ctx)`` returns the routes as ``AppRoute`` records, which the
-gateway's ``RouteRegistry`` serves under ``/api/apps/personal-shopper/<path>``
-while the app is enabled. The registry deregisters them on disable, so there is
-no enable check here: a disabled app's routes are simply not dispatched.
+``register_routes(ctx)`` returns the routes as structural route records
+(``_host.Route``), which the gateway's ``RouteRegistry`` serves under
+``/api/apps/personal-shopper/<path>`` while the app is enabled. The registry
+deregisters them on disable, so there is no enable check here: a disabled app's
+routes are simply not dispatched.
 
 Routes (browser-facing, same-origin authed). Every write is owner-only from the
 dashboard; an app token admitted by its manifest grant keeps its access:
@@ -47,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 APP_NAME = "personal-shopper"
 
-Handler = Callable[[web.Request, Any], Awaitable[web.Response]]
+Handler = Callable[[web.Request, Any], Awaitable[web.StreamResponse]]
 
 # Built on first request, not at import or registration: constructing the store
 # creates the data directory and runs sqlite DDL, which must not happen merely
@@ -61,21 +62,24 @@ _store: PreferenceStore | None = None
 _store_lock = threading.Lock()
 
 
-def _build_store(data_dir: Path) -> PreferenceStore:
+def _build_store(data_dir: Path, embedder: Any | None) -> PreferenceStore:
     """Return the singleton, building it once. Runs off the event loop.
 
     The second check inside the lock is what makes concurrent first requests
     build it once: two threads can both see ``None`` before either takes it.
     A singleton for a different data directory is replaced rather than reused,
-    so a context handed a new ``data_dir`` never writes into the old one.
+    so a context handed a new ``data_dir`` never writes into the old one. The
+    same directory under a context with a different embedder keeps its open
+    connection and takes the new embedder.
     """
     global _store
     with _store_lock:
         current = _store
         wanted = db_path_in(data_dir)
         if current is not None and current.db_path == wanted:
+            current.embedder = embedder
             return current
-        _store = PreferenceStore(wanted)
+        _store = PreferenceStore(wanted, embedder=embedder)
         if current is not None:
             current.close()
         return _store
@@ -83,9 +87,14 @@ def _build_store(data_dir: Path) -> PreferenceStore:
 
 async def _get_store(ctx: Any) -> PreferenceStore:
     current = _store
-    if current is not None and current.db_path == db_path_in(ctx.data_dir):
+    embedder = _host.embedder(ctx)
+    if (
+        current is not None
+        and current.db_path == db_path_in(ctx.data_dir)
+        and current.embedder is embedder
+    ):
         return current
-    return await asyncio.to_thread(_build_store, Path(ctx.data_dir))
+    return await asyncio.to_thread(_build_store, Path(ctx.data_dir), embedder)
 
 
 def _bad_request(error: str, code: str) -> web.Response:
@@ -186,15 +195,17 @@ def _owner_only(operation: str, handler: Handler) -> Handler:
     """Refuse a non-owner dashboard caller before a write runs.
 
     A dashboard request (``app == ""``) or one with no app claim at all goes
-    through the owner gate and its 403 ``owner_only``. An app token keeps the
+    through the host's owner gate (``ctx.require_owner``), whose refusal (403
+    ``owner_only``, or 401 for a stale session) is returned unchanged. The host
+    audits it as ``personal-shopper.<operation>``. An app token keeps the
     built-in's result: the token middleware has already confined it to the
     routes its manifest ``permissions.api`` grants.
     """
 
     @wraps(handler)
-    async def _wrapped(request: web.Request, ctx: Any) -> web.Response:
+    async def _wrapped(request: web.Request, ctx: Any) -> web.StreamResponse:
         if not request.get("app"):
-            denied = await _host.require_owner(request, f"personal_shopper.{operation}")
+            denied = await _host.require_owner(ctx, request, operation)
             if denied is not None:
                 return denied
         return await handler(request, ctx)
@@ -275,7 +286,7 @@ async def _handle_add_preference(request: web.Request, ctx: Any) -> web.Response
         return err
 
     store = await _get_store(ctx)
-    entry_id = await _host.run_in_embed_pool(store.add, text, tags=tags or [])
+    entry_id = await _host.run_embed(ctx, store.add, text, tags=tags or [])
     return web.json_response({"id": entry_id}, status=201)
 
 
@@ -299,7 +310,7 @@ async def _handle_update_preference(request: web.Request, ctx: Any) -> web.Respo
     # UPDATE writes ``_embed(new_text)``), so it belongs on the same bulkhead
     # as add/search/reembed. A tags-only update does not embed, but routing on
     # the worst case is what keeps the shared default pool free.
-    await _host.run_in_embed_pool(store.update, entry_id, text=text, tags=tags)
+    await _host.run_embed(ctx, store.update, entry_id, text=text, tags=tags)
     return web.json_response({"id": entry_id, "updated": True})
 
 
@@ -333,7 +344,7 @@ async def _handle_search_preferences(request: web.Request, ctx: Any) -> web.Resp
         return err
 
     store = await _get_store(ctx)
-    results = await _host.run_in_embed_pool(store.search, query, top_k=top_k, tag_filter=tag_filter)
+    results = await _host.run_embed(ctx, store.search, query, top_k=top_k, tag_filter=tag_filter)
     return web.json_response(
         {
             # `semantic` tells the caller whether `score` is a cosine similarity
@@ -364,7 +375,7 @@ async def _handle_reembed_preferences(request: web.Request, ctx: Any) -> web.Res
     everything added in the meantime.
     """
     store = await _get_store(ctx)
-    count = await _host.run_in_embed_pool(store.reembed_all)
+    count = await _host.run_embed(ctx, store.reembed_all)
     return web.json_response({"reembedded": count})
 
 
@@ -553,8 +564,22 @@ async def on_shutdown(ctx: Any) -> None:
         await asyncio.to_thread(store.close)
 
 
-def register_routes(ctx: Any) -> list[Any]:
-    """The manifest's ``backend.hooks.routes``: this app's routes, unprefixed."""
+def register_routes(ctx: Any) -> list[_host.Route]:
+    """The manifest's ``backend.hooks.routes``: this app's routes, unprefixed.
+
+    A gateway below App Kit level 1 still gets the routes, so reads work, but it
+    has no owner gate to hand out (every write is refused) and no shared
+    embedder (search is keyword-only). That is reported as degraded health
+    rather than left for the operator to discover one refused write at a time.
+    """
+    if _host.sdk_level(ctx) < _host.REQUIRED_SDK_LEVEL:
+        health = getattr(ctx, "health", None)
+        mark_degraded = getattr(health, "mark_degraded", None)
+        if callable(mark_degraded):
+            mark_degraded(
+                f"this Kiro Crew lacks App Kit level {_host.REQUIRED_SDK_LEVEL} "
+                "(owner gate, embedder): writes are refused and search is keyword-only"
+            )
     route = _host.app_route
     return [
         # Preferences

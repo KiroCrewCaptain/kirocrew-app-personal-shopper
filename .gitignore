@@ -8,3 +8,8 @@ data/
 .app_secret
 installed.json
 app-crons.json
+# Capture scratch. capture.py writes its raw frames and video under the system
+# temp directory and only the final media into docs/media/; these catch a run
+# pointed somewhere else by hand.
+*.raw.png
+*.webm

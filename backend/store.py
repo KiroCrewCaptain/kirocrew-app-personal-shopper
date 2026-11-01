@@ -1,7 +1,8 @@
 """Personal Shopper preference store — sqlite with vector search.
 
-Preferences are ranked by embedding similarity when the shared embedding
-backend is serving, and by keyword match when it is not. The two paths are
+Preferences are ranked by embedding similarity when the gateway's shared
+embedder (``ctx.embed``, handed in as ``embedder``) can serve, and by keyword
+match when it cannot or there is none. The two paths are
 deliberately NOT interchangeable: a cosine score means "these mean the same
 thing", while a keyword score only means "these share words", so only the
 vector path is trusted for the identity judgement behind deduplication.
@@ -22,7 +23,7 @@ import uuid
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, Protocol
 
 from ._fs import mkdirs_owner_only, prepare_owner_only_sqlite
 
@@ -33,15 +34,13 @@ APP_NAME = "personal-shopper"
 # scores — see ``_find_similar``.
 _DEDUP_COSINE = 0.9
 
-# Optional, and the one Kiro Crew import this module makes. The gateway's shared
-# embedder has no public App SDK seam yet (see PORTING.md), so it is reached
-# through the host package when the host provides it. Absent -- an older or
-# newer gateway that moved it, or a plain test run -- every embed call returns
-# None and the store degrades to keyword search, which it already handles.
-try:
-    from kiro_crew.embeddings import get_shared_embedder
-except ImportError:  # pragma: no cover - depends on the host
-    get_shared_embedder = None  # type: ignore[assignment]
+
+class Embedder(Protocol):
+    """What the store needs from the host's embed SDK (``ctx.embed``)."""
+
+    def available(self) -> bool: ...
+
+    def embed_sync(self, text: str) -> list[float] | None: ...
 
 
 class SearchResult(NamedTuple):
@@ -69,28 +68,17 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _embedder_can_serve(embedder: object) -> bool:
-    """Whether an embed can produce a vector: loaded now, or loadable on demand.
+def _serving(embedder: Embedder | None) -> Embedder | None:
+    """*embedder* when an embed can produce a vector now, else None.
 
-    Loadable counts: the model is unloaded after an idle hour, and gating on
-    ``is_ready()`` alone would then store every new preference without a vector
-    and keep search on keywords until something else reloaded it. An embed off
-    the event loop waits for that reload once.
+    The host's ``available()`` already counts a model it can load on demand (it
+    unloads an idle model), so a new preference still gets a vector after an
+    idle hour. The store adds only the "no embedder at all" case.
     """
-    if embedder.is_ready():  # type: ignore[attr-defined]
-        return True
-    can_load = getattr(embedder, "can_load_on_demand", None)
-    return bool(callable(can_load) and can_load())
+    return embedder if embedder is not None and embedder.available() else None
 
 
-def _embed(text: str) -> bytes | None:
-    """Embed *text* as packed float32, or None when no model is serving."""
-    if get_shared_embedder is None:
-        return None
-    embedder = get_shared_embedder()
-    if not _embedder_can_serve(embedder):
-        return None
-    vec = embedder.embed(text)
+def _pack(vec: list[float] | None) -> bytes | None:
     if vec is None:
         return None
     return struct.pack(f"{len(vec)}f", *vec)
@@ -138,10 +126,14 @@ def _fts_query(raw: str) -> str:
 class PreferenceStore:
     """SQLite-backed preference store with vector search and keyword fallback."""
 
-    def __init__(self, db_path: Path):
+    def __init__(self, db_path: Path, *, embedder: Embedder | None = None):
         # Required, not defaulted: an external app has no ambient data home to
         # fall back to, only the ``ctx.data_dir`` its hooks are handed.
         self.db_path = Path(db_path)
+        # The host's embed SDK, or None (keyword search only). Every embed runs
+        # in a worker thread: the routes offload these methods to the host's
+        # embed pool, and the SDK's ``embed_sync`` refuses on the event loop.
+        self.embedder: Embedder | None = embedder
         mkdirs_owner_only(self.db_path.parent)
         prepare_owner_only_sqlite(self.db_path)
         # One connection shared across the worker threads that `asyncio.to_thread`
@@ -157,6 +149,11 @@ class PreferenceStore:
         # write paths call the read paths (`add` consults `search` to dedup).
         self._lock = threading.RLock()
         self._init_schema()
+
+    def _embed(self, text: str) -> bytes | None:
+        """Embed *text* as packed float32, or None when no model is serving."""
+        embedder = _serving(self.embedder)
+        return None if embedder is None else _pack(embedder.embed_sync(text))
 
     def _init_schema(self) -> None:
         # `preferences_fts` is a standalone FTS index keyed by our own id, NOT an
@@ -237,7 +234,7 @@ class PreferenceStore:
 
             entry_id = uuid.uuid4().hex[:8]
             now = _now_iso()
-            embedding = _embed(text)
+            embedding = self._embed(text)
             self._conn.execute(
                 "INSERT INTO preferences (id, text, tags, embedding, created_at, updated_at) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
@@ -275,7 +272,7 @@ class PreferenceStore:
                 # Re-embed on a text change, or clear a now-stale vector.
                 self._conn.execute(
                     "UPDATE preferences SET text=?, tags=?, embedding=?, updated_at=? WHERE id=?",
-                    (new_text, new_tags, _embed(new_text), _now_iso(), entry_id),
+                    (new_text, new_tags, self._embed(new_text), _now_iso(), entry_id),
                 )
                 self._fts_put(entry_id, new_text)
             else:
@@ -318,11 +315,8 @@ class PreferenceStore:
         tag_filter: list[str] | None = None,
     ) -> list[SearchResult]:
         """Rank preferences against *query*, by meaning when possible."""
-        query_vec = None
-        if get_shared_embedder is not None:
-            embedder = get_shared_embedder()
-            if _embedder_can_serve(embedder):
-                query_vec = embedder.embed(query)
+        embedder = _serving(self.embedder)
+        query_vec = None if embedder is None else embedder.embed_sync(query)
 
         if query_vec is not None:
             return self._vector_search(query_vec, top_k=top_k, tag_filter=tag_filter)
@@ -547,7 +541,7 @@ class PreferenceStore:
             rows = self._conn.execute("SELECT id, text FROM preferences").fetchall()
             written = 0
             for entry_id, text in rows:
-                blob = _embed(text)
+                blob = self._embed(text)
                 if blob is None:
                     continue
                 self._conn.execute(
