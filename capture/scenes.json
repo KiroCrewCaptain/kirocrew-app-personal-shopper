@@ -1,0 +1,593 @@
+{
+  "app": "personal-shopper",
+  "fixture": "minimal",
+  "locale": "en-US",
+  "timezone": "UTC",
+  "provenance_note": "The isolated gateway served the personal-shopper app built into the Kiro Crew checkout (src/kiro_crew/apps/builtins/personal_shopper, website/src/apps/personal-shopper). This repository is the externally packaged copy of that app; PORTING.md lists where the two differ.",
+  "init_storage": {
+    "mc-nav": "0"
+  },
+  "ready": "text=Your life-problem advisor",
+  "setup": [
+    {
+      "name": "turn the app on",
+      "method": "POST",
+      "path": "/api/apps/personal-shopper/enable"
+    },
+    {
+      "name": "retire the host's one-time startup intro",
+      "method": "POST",
+      "path": "/api/feature-videos/feedback",
+      "body": {
+        "id": "crewmates",
+        "status": "dismissed"
+      },
+      "optional": true
+    },
+    {
+      "name": "group: sizes",
+      "method": "POST",
+      "path": "/api/apps/personal-shopper/groups",
+      "body": {
+        "name": "Sizes & fit",
+        "icon": ""
+      },
+      "save": {
+        "g_sizes": "id"
+      }
+    },
+    {
+      "name": "group: budget",
+      "method": "POST",
+      "path": "/api/apps/personal-shopper/groups",
+      "body": {
+        "name": "Budget",
+        "icon": ""
+      },
+      "save": {
+        "g_budget": "id"
+      }
+    },
+    {
+      "name": "group: home",
+      "method": "POST",
+      "path": "/api/apps/personal-shopper/groups",
+      "body": {
+        "name": "Home",
+        "icon": ""
+      },
+      "save": {
+        "g_home": "id"
+      }
+    },
+    {
+      "name": "group: gifts",
+      "method": "POST",
+      "path": "/api/apps/personal-shopper/groups",
+      "body": {
+        "name": "Gift ideas",
+        "icon": ""
+      },
+      "save": {
+        "g_gifts": "id"
+      }
+    },
+    {
+      "name": "pref",
+      "method": "POST",
+      "path": "/api/apps/personal-shopper/preferences",
+      "body": {
+        "text": "Running shoes: US 9.5, wide toe box",
+        "tags": [
+          "{{g_sizes}}"
+        ]
+      }
+    },
+    {
+      "name": "pref",
+      "method": "POST",
+      "path": "/api/apps/personal-shopper/preferences",
+      "body": {
+        "text": "Jackets: size M, but sleeves run short on most brands",
+        "tags": [
+          "{{g_sizes}}"
+        ]
+      }
+    },
+    {
+      "name": "pref",
+      "method": "POST",
+      "path": "/api/apps/personal-shopper/preferences",
+      "body": {
+        "text": "Everyday purchases under $80",
+        "tags": [
+          "{{g_budget}}"
+        ]
+      }
+    },
+    {
+      "name": "pref",
+      "method": "POST",
+      "path": "/api/apps/personal-shopper/preferences",
+      "body": {
+        "text": "Happy to pay more for a 5-year warranty",
+        "tags": [
+          "{{g_budget}}"
+        ]
+      }
+    },
+    {
+      "name": "pref",
+      "method": "POST",
+      "path": "/api/apps/personal-shopper/preferences",
+      "body": {
+        "text": "Fragrance-free detergents only (sensitive skin)",
+        "tags": [
+          "{{g_home}}"
+        ]
+      }
+    },
+    {
+      "name": "pref",
+      "method": "POST",
+      "path": "/api/apps/personal-shopper/preferences",
+      "body": {
+        "text": "Small kitchen: nothing wider than 30 cm on the counter",
+        "tags": [
+          "{{g_home}}"
+        ]
+      }
+    },
+    {
+      "name": "pref",
+      "method": "POST",
+      "path": "/api/apps/personal-shopper/preferences",
+      "body": {
+        "text": "Niece Mira (9) loves astronomy and drawing",
+        "tags": [
+          "{{g_gifts}}"
+        ]
+      }
+    },
+    {
+      "name": "pref",
+      "method": "POST",
+      "path": "/api/apps/personal-shopper/preferences",
+      "body": {
+        "text": "Avoid leather products",
+        "tags": []
+      }
+    },
+    {
+      "name": "sites",
+      "method": "PUT",
+      "path": "/api/apps/personal-shopper/sites",
+      "body": {
+        "sites": [
+          {
+            "id": "trailhead",
+            "name": "Trailhead Outfitters",
+            "url": "https://trailhead-outfitters.example",
+            "enabled": true,
+            "loggedIn": false
+          },
+          {
+            "id": "maple",
+            "name": "Maple & Pine Home",
+            "url": "https://maple-and-pine.example",
+            "enabled": true,
+            "loggedIn": false
+          },
+          {
+            "id": "northwind",
+            "name": "Northwind Books",
+            "url": "https://northwind-books.example",
+            "enabled": true,
+            "loggedIn": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "history: gift",
+      "method": "POST",
+      "path": "/api/apps/personal-shopper/history",
+      "body": {
+        "problem": "Birthday gift for my niece, who loves astronomy",
+        "advice": "At nine, a hands-on gift she can use without an adult beats a fragile telescope. Pair something for clear nights with something for cloudy ones.",
+        "products": [
+          {
+            "name": "Planisphere star wheel",
+            "price": 14.5,
+            "url": "https://northwind-books.example/planisphere"
+          },
+          {
+            "name": "Illustrated night-sky field guide",
+            "price": 18.99,
+            "url": "https://northwind-books.example/night-sky-guide"
+          }
+        ]
+      },
+      "save": {
+        "h_gift": "id"
+      }
+    },
+    {
+      "wait_ms": 1100
+    },
+    {
+      "name": "history: echo",
+      "method": "POST",
+      "path": "/api/apps/personal-shopper/history",
+      "body": {
+        "problem": "Our living room echoes on video calls",
+        "advice": "Hard floors and bare walls bounce sound. A large rug and the bookshelf moved to the empty wall absorb most of it; acoustic panels are not needed for a room this size.",
+        "products": []
+      }
+    },
+    {
+      "wait_ms": 1100
+    },
+    {
+      "name": "history: knees",
+      "method": "POST",
+      "path": "/api/apps/personal-shopper/history",
+      "body": {
+        "problem": "My knees ache after weekend 10K runs",
+        "advice": "Your current pair is a minimal-cushion trainer. Try the gravel path for two weeks first; if the ache stays, a high-cushion daily trainer in a wide fit is worth it.",
+        "products": [
+          {
+            "name": "Cloudrest Daily Trainer (wide)",
+            "price": 129,
+            "url": "https://trailhead-outfitters.example/cloudrest"
+          },
+          {
+            "name": "Stride Max Cushion",
+            "price": 145,
+            "url": "https://trailhead-outfitters.example/stride-max"
+          }
+        ]
+      },
+      "save": {
+        "h_knees": "id"
+      }
+    },
+    {
+      "name": "feedback",
+      "method": "PUT",
+      "path": "/api/apps/personal-shopper/history/{{h_gift}}/feedback",
+      "body": {
+        "product": "Illustrated night-sky field guide",
+        "feedback": "purchased"
+      }
+    },
+    {
+      "name": "feedback",
+      "method": "PUT",
+      "path": "/api/apps/personal-shopper/history/{{h_gift}}/feedback",
+      "body": {
+        "product": "Planisphere star wheel",
+        "feedback": "liked"
+      }
+    },
+    {
+      "name": "feedback",
+      "method": "PUT",
+      "path": "/api/apps/personal-shopper/history/{{h_knees}}/feedback",
+      "body": {
+        "product": "Stride Max Cushion",
+        "feedback": "skipped"
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "name": "hero",
+      "path": "/personal-shopper",
+      "themes": [
+        "light",
+        "dark"
+      ],
+      "ready_after": "text=Running shoes: US 9.5, wide toe box",
+      "alt": "The Personal Shopper page in Kiro Crew: a Start advisor conversation button above the Preferences tab, which lists saved sizes, budgets, home constraints and gift ideas in named groups"
+    },
+    {
+      "name": "use-case-preferences",
+      "path": "/personal-shopper",
+      "themes": [
+        "light"
+      ],
+      "ready_after": "text=Running shoes: US 9.5, wide toe box",
+      "steps": [
+        {
+          "fill": "input[placeholder^='Add a preference']",
+          "value": "Wool makes me itch: cotton or synthetic knits only"
+        },
+        {
+          "click": "[aria-label='Assign to group']"
+        },
+        {
+          "click": "role=option[name='Sizes & fit']"
+        },
+        {
+          "wait_hidden": "role=option[name='Sizes & fit']"
+        }
+      ],
+      "alt": "Adding a preference: Wool makes me itch, cotton or synthetic knits only is typed in the Add a preference box, Sizes & fit is chosen as its group, and the Add button is next to it"
+    },
+    {
+      "name": "sites",
+      "path": "/personal-shopper",
+      "themes": [
+        "light"
+      ],
+      "steps": [
+        {
+          "click": "role=radio[name='Sites']"
+        }
+      ],
+      "ready_after": "text=Trailhead Outfitters",
+      "alt": "The Sites tab: three saved stores (Trailhead Outfitters, Maple & Pine Home, Northwind Books) under a note that the advisor cannot read this list, with How research works and Privacy notes"
+    },
+    {
+      "name": "history",
+      "path": "/personal-shopper",
+      "themes": [
+        "light"
+      ],
+      "steps": [
+        {
+          "click": "role=radio[name='History']"
+        }
+      ],
+      "ready_after": "text=My knees ache after weekend 10K runs",
+      "alt": "Example data on the History tab: three past advice sessions with the problem, the advice, recommended products with prices, and Liked, Purchased or Skipped marks; the living-room echo session says advice alone was the solution"
+    },
+    {
+      "name": "library",
+      "path": "/apps/library",
+      "themes": [
+        "light"
+      ],
+      "ready": "text=Manage your installed apps",
+      "steps": [
+        {
+          "click": "[aria-label='More actions for Personal Shopper']"
+        },
+        {
+          "wait_for": "role=menuitem[name='Disable']"
+        }
+      ],
+      "alt": "The Kiro Crew Library page with the Personal Shopper tile's menu open, showing Details, Unpin and Disable"
+    },
+    {
+      "name": "use-case-no-purchase",
+      "path": "/personal-shopper",
+      "themes": [
+        "light"
+      ],
+      "steps": [
+        {
+          "click": "text=Start advisor conversation"
+        },
+        {
+          "wait_for": "textarea[aria-label='Message input']"
+        },
+        {
+          "fill": "textarea[aria-label='Message input']",
+          "value": "Our living room echoes on video calls. Do I need acoustic panels? Check Maple & Pine Home."
+        },
+        {
+          "press": "textarea[aria-label='Message input']",
+          "key": "Enter"
+        },
+        {
+          "wait_reply": true
+        },
+        {
+          "fill": "textarea[aria-label='Message input']",
+          "value": "Wooden floor, bare wall behind me, and the bookshelf is on the other side."
+        },
+        {
+          "press": "textarea[aria-label='Message input']",
+          "key": "Enter"
+        },
+        {
+          "wait_reply": true
+        },
+        {
+          "scroll_reply": "start"
+        }
+      ],
+      "ready_after": "[data-role='assistant'] [data-testid='turn-stats']",
+      "alt": "An advisor chat about a living room that echoes on video calls: told about the wooden floor and the bare wall, the advisor says the bare wall behind the user is the main problem, lists fixes best first (turn the seat so the bookshelf is behind you, which is free; a rug under the chair; a thick blanket on the bare wall), and says to buy panels only if that wall still echoes",
+      "live": true
+    },
+    {
+      "name": "use-case-advisor",
+      "path": "/personal-shopper",
+      "themes": [
+        "light"
+      ],
+      "steps": [
+        {
+          "click": "text=Start advisor conversation"
+        },
+        {
+          "wait_for": "textarea[aria-label='Message input']"
+        },
+        {
+          "fill": "textarea[aria-label='Message input']",
+          "value": "Birthday gift for my niece Mira. She turns 9 and loves astronomy. Under $40, and please check Northwind Books."
+        },
+        {
+          "press": "textarea[aria-label='Message input']",
+          "key": "Enter"
+        },
+        {
+          "wait_reply": true
+        },
+        {
+          "fill": "textarea[aria-label='Message input']",
+          "value": "No telescope. She draws a lot and likes doing things on her own."
+        },
+        {
+          "press": "textarea[aria-label='Message input']",
+          "key": "Enter"
+        },
+        {
+          "wait_reply": true
+        },
+        {
+          "scroll_reply": "start"
+        }
+      ],
+      "ready_after": "[data-role='assistant'] [data-testid='turn-stats']",
+      "alt": "An advisor chat about a birthday gift for a nine-year-old who loves astronomy: after the follow-up 'No telescope. She draws a lot and likes doing things on her own', the advisor lists a star wheel, a dark-page sky journal, white gel pens and a how-to-draw-space book with rough prices and why each fits her, picks the star wheel, journal and pens together, and says it has not checked Northwind Books because its search was stopped",
+      "live": true
+    }
+  ],
+  "forbid_text": [
+    "Loading preferences...",
+    "Loading history...",
+    "Loading sites...",
+    "Couldn't start the conversation",
+    "Could not save"
+  ],
+  "walkthrough": {
+    "name": "walkthrough",
+    "theme": "light",
+    "path": "/personal-shopper",
+    "ready_after": "text=Running shoes: US 9.5, wide toe box",
+    "alt": "A walkthrough of Personal Shopper: adding a preference and filing it under Sizes & fit, viewing the saved stores on the Sites tab, then an advisor chat about a birthday gift in which the advisor says it could not look at Northwind Books because its search was blocked, lists kinds of gift with rough prices, and after the follow-up suggests a star wheel, a sketchbook and drawing books and names its top pick",
+    "steps": [
+      {
+        "wait_for": "text=Running shoes: US 9.5, wide toe box"
+      },
+      {
+        "caption": "Your own list of sizes, budgets and must-avoids",
+        "over": "#main-content"
+      },
+      {
+        "wait_ms": 2200
+      },
+      {
+        "caption": "Add one, and file it in a group",
+        "over": "#main-content"
+      },
+      {
+        "type": "input[placeholder^='Add a preference']",
+        "value": "Wool makes me itch: cotton or synthetic knits only",
+        "delay_ms": 35
+      },
+      {
+        "click": "[aria-label='Assign to group']"
+      },
+      {
+        "click": "role=option[name='Sizes & fit']"
+      },
+      {
+        "wait_ms": 400
+      },
+      {
+        "click": "form button[type=submit]:has-text('Add')"
+      },
+      {
+        "wait_for": "text=Wool makes me itch: cotton or synthetic knits only"
+      },
+      {
+        "wait_ms": 1500
+      },
+      {
+        "caption": "Keep the stores you use",
+        "over": "#main-content"
+      },
+      {
+        "click": "role=radio[name='Sites']"
+      },
+      {
+        "wait_for": "text=Trailhead Outfitters"
+      },
+      {
+        "wait_ms": 2200
+      },
+      {
+        "caption": ""
+      },
+      {
+        "click": "text=Start advisor conversation"
+      },
+      {
+        "wait_for": "text=Set up a daily reminder",
+        "cut": true,
+        "cut_keep_ms": 300
+      },
+      {
+        "wait_for": "textarea[aria-label='Message input']"
+      },
+      {
+        "caption": "Describe the problem, and name the store",
+        "over": "[data-testid='composer-dock-root']",
+        "above": "[data-testid='composer-dock']",
+        "offset": 60
+      },
+      {
+        "wait_ms": 700
+      },
+      {
+        "type": "textarea[aria-label='Message input']",
+        "value": "Birthday gift for my niece Mira. She turns 9 and loves astronomy. Under $40, and please check Northwind Books.",
+        "delay_ms": 22
+      },
+      {
+        "press": "textarea[aria-label='Message input']",
+        "key": "Enter"
+      },
+      {
+        "caption": ""
+      },
+      {
+        "wait_reply": true,
+        "cut": true
+      },
+      {
+        "caption": "Then add what it should know",
+        "over": "[data-testid='composer-dock-root']",
+        "above": "[data-testid='composer-dock']",
+        "offset": 60
+      },
+      {
+        "wait_ms": 1800
+      },
+      {
+        "type": "textarea[aria-label='Message input']",
+        "value": "No telescope. She draws a lot and likes doing things on her own.",
+        "delay_ms": 22
+      },
+      {
+        "press": "textarea[aria-label='Message input']",
+        "key": "Enter"
+      },
+      {
+        "caption": ""
+      },
+      {
+        "wait_reply": true,
+        "cut": true
+      },
+      {
+        "scroll_reply": "start"
+      },
+      {
+        "wait_ms": 4000
+      }
+    ],
+    "tail_ms": 400,
+    "live": true
+  },
+  "data_notes": [
+    "History entries carry the date they were saved: the app stamps each entry with the gateway's own clock and its API takes no date, so every entry shows the capture day.",
+    "History was filled through POST /api/apps/personal-shopper/history. Nothing in the app's UI or the advisor writes History today, so the README shows that picture as example data.",
+    "The chat scenes ran on a live model (see agent_backend). The gateway's approval mode is 'reads', which approves web page fetches but declined the advisor's web searches, and the stores are fictional .example sites that cannot be opened, so the advisor read no store page: the prices in its replies are its own rough guesses, as it says."
+  ]
+}

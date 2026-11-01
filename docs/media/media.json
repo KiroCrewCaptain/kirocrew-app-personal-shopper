@@ -1,0 +1,122 @@
+{
+  "app": "personal-shopper",
+  "captured_at": "2026-11-01T22:02:47Z",
+  "app_commit": "4933502d0c83faf560fc2b526829e6595bbac583",
+  "kirocrew_commit": "00b527df15c33dd2fa6a73e70746622a5b706fbe",
+  "kirocrew_tree_dirty": false,
+  "gateway": "isolated temporary home, approval=reads; a freshly seeded gateway for the stub screenshots, one for the live ones and one for the walkthrough",
+  "data": "fictional, seeded through the app's HTTP API (capture/scenes.json)",
+  "agent_backend": {
+    "live": [
+      "use-case-advisor",
+      "use-case-no-purchase",
+      "walkthrough"
+    ],
+    "live_model": "the operator's own installed, signed-in kiro-cli over ACP with model \"auto\"; the replies on screen are that model's and vary from run to run",
+    "stub": "Kiro Crew's offline stub ACP backend (capture/stub_backend.py) for every other scene; no chat reply is shown from it",
+    "credit_reading": "the browser answers the top bar's credit readout (/api/sessions/usage) with \"no reading\", so no account balance or email can be shown"
+  },
+  "note": "The isolated gateway served the personal-shopper app built into the Kiro Crew checkout (src/kiro_crew/apps/builtins/personal_shopper, website/src/apps/personal-shopper). This repository is the externally packaged copy of that app; PORTING.md lists where the two differ.",
+  "data_notes": [
+    "History entries carry the date they were saved: the app stamps each entry with the gateway's own clock and its API takes no date, so every entry shows the capture day.",
+    "History was filled through POST /api/apps/personal-shopper/history. Nothing in the app's UI or the advisor writes History today, so the README shows that picture as example data.",
+    "The chat scenes ran on a live model (see agent_backend). The gateway's approval mode is 'reads', which approves web page fetches but declined the advisor's web searches, and the stores are fictional .example sites that cannot be opened, so the advisor read no store page: the prices in its replies are its own rough guesses, as it says."
+  ],
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "device_scale": 2,
+  "screenshots": [
+    {
+      "file": "hero-dark.png",
+      "name": "hero",
+      "theme": "dark",
+      "bytes": 242471,
+      "width": 1600,
+      "height": 1000,
+      "alt": "The Personal Shopper page in Kiro Crew: a Start advisor conversation button above the Preferences tab, which lists saved sizes, budgets, home constraints and gift ideas in named groups"
+    },
+    {
+      "file": "hero-light.png",
+      "name": "hero",
+      "theme": "light",
+      "bytes": 219155,
+      "width": 1600,
+      "height": 1000,
+      "alt": "The Personal Shopper page in Kiro Crew: a Start advisor conversation button above the Preferences tab, which lists saved sizes, budgets, home constraints and gift ideas in named groups"
+    },
+    {
+      "file": "history-light.png",
+      "name": "history",
+      "theme": "light",
+      "bytes": 241754,
+      "width": 1600,
+      "height": 1000,
+      "alt": "Example data on the History tab: three past advice sessions with the problem, the advice, recommended products with prices, and Liked, Purchased or Skipped marks; the living-room echo session says advice alone was the solution"
+    },
+    {
+      "file": "library-light.png",
+      "name": "library",
+      "theme": "light",
+      "bytes": 118742,
+      "width": 1600,
+      "height": 1000,
+      "alt": "The Kiro Crew Library page with the Personal Shopper tile's menu open, showing Details, Unpin and Disable"
+    },
+    {
+      "file": "sites-light.png",
+      "name": "sites",
+      "theme": "light",
+      "bytes": 192339,
+      "width": 1600,
+      "height": 1000,
+      "alt": "The Sites tab: three saved stores (Trailhead Outfitters, Maple & Pine Home, Northwind Books) under a note that the advisor cannot read this list, with How research works and Privacy notes"
+    },
+    {
+      "file": "use-case-advisor-light.png",
+      "name": "use-case-advisor",
+      "theme": "light",
+      "bytes": 326421,
+      "width": 1600,
+      "height": 1000,
+      "alt": "An advisor chat about a birthday gift for a nine-year-old who loves astronomy: after the follow-up 'No telescope. She draws a lot and likes doing things on her own', the advisor lists a star wheel, a dark-page sky journal, white gel pens and a how-to-draw-space book with rough prices and why each fits her, picks the star wheel, journal and pens together, and says it has not checked Northwind Books because its search was stopped"
+    },
+    {
+      "file": "use-case-no-purchase-light.png",
+      "name": "use-case-no-purchase",
+      "theme": "light",
+      "bytes": 289994,
+      "width": 1600,
+      "height": 1000,
+      "alt": "An advisor chat about a living room that echoes on video calls: told about the wooden floor and the bare wall, the advisor says the bare wall behind the user is the main problem, lists fixes best first (turn the seat so the bookshelf is behind you, which is free; a rug under the chair; a thick blanket on the bare wall), and says to buy panels only if that wall still echoes"
+    },
+    {
+      "file": "use-case-preferences-light.png",
+      "name": "use-case-preferences",
+      "theme": "light",
+      "bytes": 220839,
+      "width": 1600,
+      "height": 1000,
+      "alt": "Adding a preference: Wool makes me itch, cotton or synthetic knits only is typed in the Add a preference box, Sizes & fit is chosen as its group, and the Add button is next to it"
+    }
+  ],
+  "walkthrough": {
+    "shortened_waits_s": [
+      17.7,
+      6.3
+    ],
+    "mp4": {
+      "file": "walkthrough.mp4",
+      "bytes": 710729
+    },
+    "gif": {
+      "file": "walkthrough.gif",
+      "bytes": 4348018,
+      "width": 960,
+      "fps": 10
+    },
+    "theme": "light",
+    "alt": "A walkthrough of Personal Shopper: adding a preference and filing it under Sizes & fit, viewing the saved stores on the Sites tab, then an advisor chat about a birthday gift in which the advisor says it could not look at Northwind Books because its search was blocked, lists kinds of gift with rough prices, and after the follow-up suggests a star wheel, a sketchbook and drawing books and names its top pick"
+  }
+}
