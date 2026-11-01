@@ -1,0 +1,6 @@
+# Test-only dependencies, pinned. Deliberately NOT at the repository root: a root
+# requirements.txt makes a Kiro Crew registry install run pip into the gateway's
+# interpreter (and is refused outright on the desktop build). At runtime the app
+# needs only the stdlib and aiohttp, which the gateway already provides.
+aiohttp==3.14.3
+pytest==9.0.3

@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+# Install-time state the gateway writes into an installed copy. Never commit it:
+# it carries machine-local paths and the app's own data.
+data/
+.app_secret
+installed.json
+app-crons.json
