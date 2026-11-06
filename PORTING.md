@@ -16,11 +16,24 @@ is a Kiro Crew change, not a change here.
 ## What carried over unchanged
 
 - `app.json` `name` (`personal-shopper`) and `version` (`0.1.0`), so adoption can
-  map an existing built-in record onto this source one to one. `defaultEnabled`,
-  `permissions`, `platform`, `agents`, `skills` and every display field are the
-  same; `tests/test_manifest_contract.py` compares them with the built-in's
-  manifest (`tests/fixtures/builtin-app.json`), because adoption refuses a
-  manifest that would widen a grant or force the app off.
+  map an existing built-in record onto this source one to one. That version is
+  the one at the commit Kiro Crew pins (`5ee04d9`); later commits raise it so an
+  adopted copy is offered their fixes as an update, and never lower it.
+  `defaultEnabled`, `permissions`, `platform`, `agents`, `skills` and every
+  display field are the same; `tests/test_manifest_contract.py` compares them
+  with the built-in's manifest (`tests/fixtures/builtin-app.json`), because
+  adoption refuses a manifest that would widen a grant or force the app off.
+
+## Fixes carried over from the built-in after the port
+
+The built-in kept receiving fixes after this repository was cut. Each one is
+ported here so an adopted user has everything a built-in user has:
+
+| Kiro Crew commit | What | Here |
+|---|---|---|
+| `aa56e70` (#30535) | Group names match case-insensitively for non-ASCII letters (`str.casefold`, not SQLite `lower()`) | `backend/store.py` `add_group`, test in `tests/test_store.py` |
+| `888c8c6` (#30493) | The five text fields have accessible names, in every locale | `ui/src/*Tab.tsx`, `ui/i18n/*.json`, `ui/tests/fieldLabels.test.tsx` |
+| `c5c0eb0`, `059affd`, `b07516c`, `d092797` | Test-only coverage of the page tabs, the API wrapper, Sites and History | `ui/tests/pageTabs.test.tsx`, `ui/tests/api.test.ts`, `ui/tests/SitesTabCoverage.test.tsx`, `ui/tests/HistoryTabCoverage.test.tsx` |
 - `agents/advisor.json` and `skills/personal-shopper/SKILL.md`, byte for byte.
   The materialized names (`personal-shopper-advisor`, skill `personal-shopper`)
   are therefore the same as the built-in's.

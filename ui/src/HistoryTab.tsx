@@ -79,6 +79,7 @@ export function HistoryTab() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder={t('historyTab.search_past_sessions')}
+          aria-label={t('historyTab.search_label')}
           className="pl-8"
         />
       </div>

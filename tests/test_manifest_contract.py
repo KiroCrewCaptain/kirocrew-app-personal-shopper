@@ -4,10 +4,12 @@ Kiro Crew adopts a user's built-in record onto this repository in place, at a
 pinned commit, with no consent dialog, so the tree must be something it can take
 over unchanged:
 
-- the same name, version, permissions, agents, skills and ``defaultEnabled`` as
-  the built-in (``tests/fixtures/builtin-app.json`` is its manifest at the
-  commit this was ported from). A widened grant would be held back or force the
-  app off, and adoption refuses that;
+- the same name, permissions, agents, skills and ``defaultEnabled`` as the
+  built-in (``tests/fixtures/builtin-app.json`` is its manifest at the commit
+  this was ported from). A widened grant would be held back or force the app
+  off, and adoption refuses that. The version is the built-in's at the commit
+  Kiro Crew pins; later commits carry a higher one so an adopted copy is offered
+  the update, and it may never go below the built-in's;
 - nothing that needs a build at install time, and no symlinks or file names a
   Windows checkout cannot hold;
 - a committed UI bundle that imports only the seven modules the dashboard
@@ -104,6 +106,11 @@ def _manifest() -> dict:
     return json.loads((APP_ROOT / "app.json").read_text(encoding="utf-8"))
 
 
+def _semver(version: str) -> tuple[int, int, int]:
+    major, minor, patch = (int(part) for part in version.split("."))
+    return major, minor, patch
+
+
 def _builtin() -> dict:
     return json.loads((APP_ROOT / "tests" / "fixtures" / "builtin-app.json").read_text("utf-8"))
 
@@ -171,10 +178,11 @@ class TestTheManifest(unittest.TestCase):
 
     def test_what_adoption_compares_is_the_builtins(self) -> None:
         manifest, builtin = _manifest(), _builtin()
-        for key in ("name", "version", "permissions", "agents", "skills", "defaultEnabled"):
+        for key in ("name", "permissions", "agents", "skills", "defaultEnabled"):
             with self.subTest(field=key):
                 self.assertEqual(manifest[key], builtin[key])
         self.assertEqual(manifest["platform"], builtin["platform"])
+        self.assertGreaterEqual(_semver(manifest["version"]), _semver(builtin["version"]))
 
     def test_declares_nothing_adoption_cannot_carry(self) -> None:
         manifest = _manifest()

@@ -383,10 +383,17 @@ class TestManifestWiring(unittest.TestCase):
                 self.assertTrue(path.is_file(), f"{rel} is missing")
                 self.assertEqual(path.read_bytes()[:8], b"\x89PNG\r\n\x1a\n", f"{rel} is not a PNG")
 
-    def test_name_and_version_match_the_builtin(self) -> None:
-        """Adoption maps the built-in record onto this app by name and version."""
+    def test_name_matches_the_builtin_and_version_never_goes_below_it(self) -> None:
+        """Adoption maps the built-in record onto this app by name.
+
+        The version equals the built-in's (0.1.0) at the commit Kiro Crew pins;
+        a later commit carries a higher one, so an adopted copy is offered the
+        update. It must never fall below the built-in's.
+        """
         manifest = _manifest()
-        self.assertEqual((manifest["name"], manifest["version"]), ("personal-shopper", "0.1.0"))
+        self.assertEqual(manifest["name"], "personal-shopper")
+        version = tuple(int(part) for part in manifest["version"].split("."))
+        self.assertGreaterEqual(version, (0, 1, 0))
 
     def test_nothing_triggers_an_install_time_build(self) -> None:
         """A root build file makes a registry install run pip or npm.
@@ -460,6 +467,16 @@ class TestGroupIdsAreOpaque(PreferenceStoreTestCase):
 
         self.assertEqual(first, second)
         self.assertEqual(len(store.list_groups()), 1)
+
+    def test_same_name_match_ignores_case_for_non_ascii_letters(self) -> None:
+        """SQLite's lower() folds ASCII only, so accented names duplicated."""
+        store = self._store()
+        for upper, lower in (("Électronique", "électronique"), ("Обувь", "обувь")):
+            first = store.add_group(upper)
+            second = store.add_group(lower)
+            names = [g["name"] for g in store.list_groups()]
+            self.assertEqual(first, second, f"duplicate group created: {names!r}")
+        self.assertEqual(len(store.list_groups()), 2)
 
     def test_a_group_id_is_not_derived_from_its_name(self) -> None:
         store = self._store()
