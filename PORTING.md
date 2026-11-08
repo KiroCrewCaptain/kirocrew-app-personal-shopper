@@ -34,6 +34,8 @@ ported here so an adopted user has everything a built-in user has:
 | `aa56e70` (#30535) | Group names match case-insensitively for non-ASCII letters (`str.casefold`, not SQLite `lower()`) | `backend/store.py` `add_group`, test in `tests/test_store.py` |
 | `888c8c6` (#30493) | The five text fields have accessible names, in every locale | `ui/src/*Tab.tsx`, `ui/i18n/*.json`, `ui/tests/fieldLabels.test.tsx` |
 | `c5c0eb0`, `059affd`, `b07516c`, `d092797` | Test-only coverage of the page tabs, the API wrapper, Sites and History | `ui/tests/pageTabs.test.tsx`, `ui/tests/api.test.ts`, `ui/tests/SitesTabCoverage.test.tsx`, `ui/tests/HistoryTabCoverage.test.tsx` |
+| `7088d8a` (#33256) | A site's Remove button keeps keyboard focus while the save runs (`aria-disabled`, not `disabled`) | `ui/src/SitesTab.tsx`, test in `ui/tests/SitesTabCoverage.test.tsx` |
+| `6b1c426` (#31884, #31880) | A preference row's hover-only Edit and Delete controls also show on keyboard focus (`has-[:focus-visible]:opacity-100`); core skips the adopted copy, so the fix is made here | `ui/src/PreferencesTab.tsx`, test in `ui/tests/PreferencesTabCoverage.test.tsx` |
 - `agents/advisor.json` and `skills/personal-shopper/SKILL.md`, byte for byte.
   The materialized names (`personal-shopper-advisor`, skill `personal-shopper`)
   are therefore the same as the built-in's.
