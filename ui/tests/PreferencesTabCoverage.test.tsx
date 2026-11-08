@@ -265,6 +265,22 @@ describe('PreferencesTab — adding a preference', () => {
 // ── Editing and deleting a row ─────────────────────────────────────────────
 
 describe('PreferencesTab — preference row', () => {
+  it('reveals the hover-only Edit and Delete controls when the keyboard reaches them', async () => {
+    // The wrapper is opacity-0 until the row is hovered. Tab still lands on
+    // both buttons, so the wrapper must also show while one of them holds
+    // keyboard focus, or a keyboard user focuses a control they cannot see.
+    seed({ preferences: [mkPref('p1', 'shoe size US 10')] })
+    renderWithProviders(<PreferencesTab />)
+    const edit = await waitFor(() => editBtn('shoe size US 10'))
+    const wrapper = edit.parentElement
+    if (!wrapper) throw new Error('Edit button has no wrapper')
+    expect(wrapper).toContainElement(deletePrefBtn('shoe size US 10'))
+    const classes = wrapper.className.split(' ')
+    expect(classes).toContain('opacity-0')
+    expect(classes).toContain('group-hover:opacity-100')
+    expect(classes).toContain('has-[:focus-visible]:opacity-100')
+  })
+
   it('saves an edited row through PUT and leaves edit mode', async () => {
     seed({ preferences: [mkPref('p1', 'shoe size US 10')] })
     renderWithProviders(<PreferencesTab />)

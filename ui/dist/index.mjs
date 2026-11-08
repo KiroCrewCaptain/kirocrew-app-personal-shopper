@@ -1528,7 +1528,7 @@ function PreferenceRow({ pref, onDelete, onUpdate, groupNames, groups, sectionGr
 				children: groupNames.get(t) ?? t
 			}, t)),
 			/* @__PURE__ */ jsxs("div", {
-				className: "opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 flex gap-1 transition-opacity",
+				className: "opacity-0 group-hover:opacity-100 has-[:focus-visible]:opacity-100 [@media(hover:none)]:opacity-100 flex gap-1 transition-opacity",
 				children: [/* @__PURE__ */ jsx("button", {
 					onClick: startEditing,
 					className: "text-[var(--muted)] hover:text-[var(--accent)]",
