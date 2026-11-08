@@ -1840,9 +1840,10 @@ function SitesTab() {
 						})]
 					}),
 					/* @__PURE__ */ jsx("button", {
+						type: "button",
 						onClick: () => removeSite(site.id),
-						disabled: busy,
-						className: "opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 focus-visible:opacity-100 text-[var(--muted)] hover:text-[var(--danger)] disabled:opacity-30 [@media(hover:none)]:disabled:opacity-30 transition-all flex-shrink-0",
+						"aria-disabled": busy || void 0,
+						className: "opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 focus-visible:opacity-100 text-[var(--muted)] hover:text-[var(--danger)] aria-disabled:opacity-30 aria-disabled:hover:text-[var(--muted)] aria-disabled:cursor-not-allowed [@media(hover:none)]:aria-disabled:opacity-30 transition-all flex-shrink-0",
 						title: t("sitesTab.remove_site"),
 						"aria-label": t("sitesTab.remove_named_site", { name: site.name }),
 						children: /* @__PURE__ */ jsx(Trash2, { size: 14 })
