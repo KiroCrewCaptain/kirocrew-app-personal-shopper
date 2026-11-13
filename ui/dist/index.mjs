@@ -1263,7 +1263,8 @@ function PreferencesTab() {
 	});
 	const grouped = /* @__PURE__ */ new Map();
 	const ungrouped = [];
-	for (const pref of preferences) if (pref.tags.length === 0) ungrouped.push(pref);
+	const groupsLoaded = groupsData !== void 0;
+	for (const pref of preferences) if (pref.tags.length === 0 || groupsLoaded && !pref.tags.some((tag) => groupNames.has(tag))) ungrouped.push(pref);
 	else for (const tag of pref.tags) {
 		if (!grouped.has(tag)) grouped.set(tag, []);
 		grouped.get(tag).push(pref);

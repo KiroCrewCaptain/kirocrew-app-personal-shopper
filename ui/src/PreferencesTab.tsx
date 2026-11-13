@@ -119,9 +119,14 @@ export function PreferencesTab() {
   // Group preferences by tag
   const grouped = new Map<string, Preference[]>()
   const ungrouped: Preference[] = []
+  // Only group sections are rendered, so a preference none of whose tags names
+  // an existing group (the API accepts any tag string) would otherwise appear
+  // nowhere. It is filed under Ungrouped, where its row still shows the stray
+  // tags as pills. Until the groups query has answered, no tag can be judged.
+  const groupsLoaded = groupsData !== undefined
 
   for (const pref of preferences) {
-    if (pref.tags.length === 0) {
+    if (pref.tags.length === 0 || (groupsLoaded && !pref.tags.some((tag) => groupNames.has(tag)))) {
       ungrouped.push(pref)
     } else {
       for (const tag of pref.tags) {
