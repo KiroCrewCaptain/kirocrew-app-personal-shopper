@@ -127,6 +127,40 @@ describe('PreferencesTab — query states', () => {
     expect(within(section).getByText('shoe size US 10')).toBeInTheDocument()
     expect(screen.queryByText('No preferences yet')).toBeNull()
   })
+
+  it('lists a preference whose tags name no existing group under Ungrouped', async () => {
+    // The API accepts any tag string, so a direct write can file a preference
+    // under a tag no group carries. Without a section for it, it was invisible.
+    seed({
+      preferences: [
+        mkPref('p1', 'wide toe box', ['g1']),
+        mkPref('p2', 'prefers wool', ['not-a-group']),
+        mkPref('p3', 'size M tops', ['g1', 'not-a-group']),
+      ],
+      groups: [mkGroup('g1', 'Footwear')],
+    })
+    renderWithProviders(<PreferencesTab />)
+    expect(await screen.findByText('Ungrouped')).toBeInTheDocument()
+    const ungrouped = screen.getByText('Ungrouped').closest('section') as HTMLElement
+    expect(within(ungrouped).getByText('prefers wool')).toBeInTheDocument()
+    // The stray tag stays visible on the row as a pill.
+    expect(within(ungrouped).getByText('not-a-group')).toBeInTheDocument()
+    // A preference that names at least one real group is filed there only.
+    expect(within(ungrouped).queryByText('size M tops')).toBeNull()
+    expect(within(ungrouped).queryByText('wide toe box')).toBeNull()
+    expect(within(sectionFor('Footwear')).getByText('size M tops')).toBeInTheDocument()
+  })
+
+  it('does not file a tagged preference under Ungrouped before the groups have loaded', async () => {
+    mockGet.mockImplementation((path: string) => {
+      if (path === '/groups') return new Promise<never>(() => {})
+      return Promise.resolve({ preferences: [mkPref('p1', 'wide toe box', ['g1'])] })
+    })
+    renderWithProviders(<PreferencesTab />)
+    expect(await screen.findByPlaceholderText(PREF_PLACEHOLDER)).toBeInTheDocument()
+    expect(screen.queryByText('Ungrouped')).toBeNull()
+    expect(screen.queryByText('wide toe box')).toBeNull()
+  })
 })
 
 // ── Group sections ─────────────────────────────────────────────────────────
